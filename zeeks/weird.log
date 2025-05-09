@@ -1,0 +1,21 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	weird
+#open	2025-04-23-09-13-19
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	name	addl	notice	peer	source
+#types	time	string	addr	port	addr	port	string	string	bool	string	string
+1512843966.362296	Ccwhx32jXLnE0PKRIa	192.251.10.21	4054	192.168.1.40	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843966.365220	CYvTvp1fCDkls1L0il	192.251.10.21	1138	192.251.10.68	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843966.425778	CzQZyo39qcXXwfVSe3	192.251.10.21	1129	192.251.10.56	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843967.098836	Cm2YPP13RQGTxzphz	192.251.10.21	1128	192.251.10.65	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843967.164045	CX4oMw1KUeR2FnCf98	192.251.10.21	1140	192.251.10.63	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843975.855651	C5ETfm3DdmKUdxChSh	10.131.97.11	51318	192.33.4.12	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
+1512843975.855651	C5ETfm3DdmKUdxChSh	10.131.97.11	51318	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843975.855701	CkhRiQy6dbIF1DZXe	10.131.97.11	52645	202.12.27.33	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843978.192388	Cr1dvn1DjH4991qpHa	192.251.11.33	53108	192.251.11.11	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
+1512843978.192388	Cr1dvn1DjH4991qpHa	192.251.11.33	53108	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843988.616940	CHjRR23fTqrKUvUtC5	192.251.11.33	65197	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843990.052337	C0lExv2P6I6AqQoHwk	10.131.97.11	52909	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+#close	2025-04-23-09-13-19
