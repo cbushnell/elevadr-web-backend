@@ -3,7 +3,7 @@
 #empty_field	(empty)
 #unset_field	-
 #path	known_services
-#open	2025-05-15-15-00-03
+#open	2025-05-16-09-39-10
 #fields	ts	host	port_num	port_proto	service
 #types	time	addr	port	enum	set[string]
 1512843440.178474	10.131.97.11	137	udp	DNS
@@ -13,4 +13,4 @@
 1512844428.332073	192.168.1.40	44818	tcp	(empty)
 1512844428.332073	10.131.96.14	44818	tcp	(empty)
 1512844428.332073	10.131.96.13	44818	tcp	(empty)
-#close	2025-05-15-15-00-03
+#close	2025-05-16-09-39-10

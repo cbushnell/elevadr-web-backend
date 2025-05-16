@@ -3,19 +3,19 @@
 #empty_field	(empty)
 #unset_field	-
 #path	weird
-#open	2025-05-15-15-00-03
+#open	2025-05-16-09-39-10
 #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	name	addl	notice	peer	source
 #types	time	string	addr	port	addr	port	string	string	bool	string	string
-1512843966.362296	CbYdPO1i8Rt38BX3j	192.251.10.21	4054	192.168.1.40	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
-1512843966.365220	Cckz9Z14gKX7ogz3Wc	192.251.10.21	1138	192.251.10.68	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
-1512843966.425778	C8QmYA2YTjnlp7xAj5	192.251.10.21	1129	192.251.10.56	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
-1512843967.098836	Cw5cPA1e3V1xQT0Mh	192.251.10.21	1128	192.251.10.65	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
-1512843967.164045	CFQlUl3kN0MXRv8voi	192.251.10.21	1140	192.251.10.63	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
-1512843975.855651	CRoBm41xQtUKGNJ5B	10.131.97.11	51318	192.33.4.12	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
-1512843975.855651	CRoBm41xQtUKGNJ5B	10.131.97.11	51318	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
-1512843975.855701	CVEku71IVfYc89h7E4	10.131.97.11	52645	202.12.27.33	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
-1512843978.192388	CskxjMyHidImxRFl9	192.251.11.33	53108	192.251.11.11	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
-1512843978.192388	CskxjMyHidImxRFl9	192.251.11.33	53108	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
-1512843988.616940	ChL6tX2xT0jYYpvCwa	192.251.11.33	65197	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
-1512843990.052337	CnIVEY3GXnW4aUNUwd	10.131.97.11	52909	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
-#close	2025-05-15-15-00-04
+1512843966.362296	CLWHp02U7M4ZoNu7uk	192.251.10.21	4054	192.168.1.40	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843966.365220	CQLynh47cspR4LYZj	192.251.10.21	1138	192.251.10.68	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843966.425778	CDP7CA3vtR8qy5uZtc	192.251.10.21	1129	192.251.10.56	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843967.098836	CyQiEm4zGDigvM1wod	192.251.10.21	1128	192.251.10.65	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843967.164045	CY60pP113GaMSVKi43	192.251.10.21	1140	192.251.10.63	44818	above_hole_data_without_any_acks	-	F	zeek	TCP
+1512843975.855651	CGXFye2cLhkToGJixd	10.131.97.11	51318	192.33.4.12	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
+1512843975.855651	CGXFye2cLhkToGJixd	10.131.97.11	51318	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843975.855701	ChEnZK1zm8nvwVePg	10.131.97.11	52645	202.12.27.33	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843978.192388	CSYKt13tGN7yJmDJV	192.251.11.33	53108	192.251.11.11	53	DNS_label_len_gt_pkt	-	F	zeek	DNS
+1512843978.192388	CSYKt13tGN7yJmDJV	192.251.11.33	53108	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843988.616940	C8tOfR2hDnaeuKaRK9	192.251.11.33	65197	192.251.11.11	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+1512843990.052337	CI2t4A4GRo82JUEMi7	10.131.97.11	52909	192.33.4.12	53	DNS_truncated_quest_too_short	-	F	zeek	DNS
+#close	2025-05-16-09-39-10
