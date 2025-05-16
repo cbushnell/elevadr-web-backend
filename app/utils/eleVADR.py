@@ -7,6 +7,8 @@ import json
 import yaml
 import os
 
+from app.utils.utils import convert_ips
+
 class Assessor:
 
     def __init__(
@@ -27,15 +29,9 @@ class Assessor:
 
         self.conn_df = log_to_df.create_dataframe(str(Path(self.upload_output_zeek_dir + "/conn.log")))
         # todo: eventually only convert the unique values to optimize
-        self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(
-            lambda x: int(ipaddress.IPv4Address(x))
-        )
-        self.conn_df["id.resp_h_int"] = self.conn_df["id.resp_h"].apply(
-            lambda x: int(ipaddress.IPv4Address(x))
-        )
-        self.conn_df["id.resp_h"] = self.conn_df["id.resp_h"].apply(
-            ipaddress.IPv4Address
-        )
+        self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(convert_ips)
+        self.conn_df["id.resp_h_int"] = self.conn_df["id.resp_h"].apply(convert_ips)
+        self.conn_df["id.resp_h"] = self.conn_df["id.resp_h"]
         self.known_services_df = log_to_df.create_dataframe(
             Path(self.upload_output_zeek_dir + "/known_services.log")
         )  # Exploring how to actually generate this file
@@ -93,7 +89,7 @@ class Assessor:
 
     def check_ports(self):
         # known_services.log filtered
-        print(self.known_services_df)
+        # print(self.known_services_df)
         unique_ks_df = (
             self.known_services_df[["port_num", "service"]]
             .groupby(["port_num", "service"], observed=True)
@@ -103,7 +99,7 @@ class Assessor:
         )
         
         # Add ICS protocol ports
-        print(self.ics_ports)
+        # print(self.ics_ports)
         unique_ks_df["service"] = unique_ks_df["service"].astype("object")
         unique_ks_df['service'] = unique_ks_df['port_num'].map(self.ics_ports).fillna(unique_ks_df['service'])
         self.analysis_dataframes["Known Services"] = unique_ks_df
