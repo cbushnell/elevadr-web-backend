@@ -5,24 +5,27 @@ from pathlib import Path
 import ipaddress
 import json
 import yaml
-
+import os
 
 class Assessor:
 
     def __init__(
         self,
-        path_to_pcap="data/Module_7_IR_Lab_1.pcap",
-        path_to_zeek="zeeks",
-        path_to_zeek_scripts="zeek_scripts",
+        path_to_pcap=None,
+        path_to_zeek=None,
+        path_to_zeek_scripts=None
     ):
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
         self.load_consts()
-        # self.zeekify(path_to_pcap, path_to_zeek, path_to_zeek_scripts)
+        self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
+        self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
+
+        self.zeekify()
         log_to_df = LogToDataFrame()
 
-        self.conn_df = log_to_df.create_dataframe(Path(self.path_to_zeek + "/conn.log"))
+        self.conn_df = log_to_df.create_dataframe(str(Path(self.upload_output_zeek_dir + "/conn.log")))
         # todo: eventually only convert the unique values to optimize
         self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(
             lambda x: int(ipaddress.IPv4Address(x))
@@ -34,7 +37,7 @@ class Assessor:
             ipaddress.IPv4Address
         )
         self.known_services_df = log_to_df.create_dataframe(
-            Path(self.path_to_zeek + "/known_services.log")
+            Path(self.upload_output_zeek_dir + "/known_services.log")
         )  # Exploring how to actually generate this file
 
         self.analysis_dataframes = (
@@ -57,27 +60,31 @@ class Assessor:
         # Get rows where ICS Manufacturer is identified as source
         print(self.conn_df[~self.conn_df["ICS_manufacturer"].isnull()])
 
-    def zeekify(self, filename, output, script_dir):
-        print(filename, output, script_dir)
+    def zeekify(self):
+        print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
+        # Make a new subdirectory for the pcap analysis based on pcap name
+        
+        if not os.path.isdir(self.upload_output_zeek_dir):
+            os.mkdir(self.upload_output_zeek_dir)
         subprocess.check_output(
-            ["zeek", "-r", filename, f"Log::default_logdir={output}"]
+            ["zeek", "-r", self.path_to_pcap, f"Log::default_logdir={self.upload_output_zeek_dir}"]
         )
         subprocess.check_output(
             [
                 "zeek",
                 "-r",
-                filename,
-                Path(script_dir, "known_services.zeek"),
-                f"Log::default_logdir={output}",
+                self.path_to_pcap,
+                Path(self.path_to_zeek_scripts, "known_services.zeek"),
+                f"Log::default_logdir={self.upload_output_zeek_dir}",
             ]
         )
         subprocess.check_output(
             [
                 "zeek",
                 "-r",
-                filename,
-                Path(script_dir, "mac_logging.zeek"),
-                f"Log::default_logdir={output}",
+                self.path_to_pcap,
+                Path(self.path_to_zeek_scripts, "mac_logging.zeek"),
+                f"Log::default_logdir={self.upload_output_zeek_dir}",
             ]
         )
 
@@ -86,16 +93,23 @@ class Assessor:
 
     def check_ports(self):
         # known_services.log filtered
+        print(self.known_services_df)
         unique_ks_df = (
             self.known_services_df[["port_num", "service"]]
             .groupby(["port_num", "service"], observed=True)
-            .count()
-            .sort_values("port_num")
+            .size()
+            .reset_index()
+            .rename(columns={0:'count'})[["port_num", "service"]]
         )
-        df = unique_ks_df
-        self.analysis_dataframes["Known Services"] = df
+        
+        # Add ICS protocol ports
+        print(self.ics_ports)
+        unique_ks_df["service"] = unique_ks_df["service"].astype("object")
+        unique_ks_df['service'] = unique_ks_df['port_num'].map(self.ics_ports).fillna(unique_ks_df['service'])
+        self.analysis_dataframes["Known Services"] = unique_ks_df
 
     def check_external(self):
+        # TODO: Move the timestamp to a non-index column, since those are removed during the HTML conversion
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
         problematic_internals = []
@@ -139,15 +153,15 @@ class Assessor:
     def check_segmented(self):
         # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
         self.identify_local_vlans()
+        # todo-get this list filtered to local_orig
         cross_segment_traffic = self.conn_df[
             (self.conn_df["/24"] != self.conn_df["/24_resp"])
             & (self.conn_df["local_orig"] == "T")
             & (self.conn_df["local_resp"] == "T")
         ]
         return cross_segment_traffic
-    
 
-    def analyze_segmentation(self, cross_segment_traffic):
+    def identify_subnets(self, cross_segment_traffic):
         # Given output of check_segmented, identify where our guess at networks might be wrong
         # placeholder logic for if too much cross traffic is occuring
         if len(cross_segment_traffic) > 20:
@@ -175,22 +189,15 @@ class Assessor:
 
     def run_analysis(self):
         self.check_ports()
-        # self.check_external()
-
-        #Run segmentation check
-        cross_segment_traffic = self.check_segmented()
-        self.analyze_segmentation(cross_segment_traffic)
-
-        #
-
-        self.check_nothing()  # remove this later
+        self.check_external()
+        # self.check_segmented()
 
     def generate_report(self):
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
                 dataframes_as_html += (
-                    f"<h2>{df_name}:</h2>" + self.analysis_dataframes[df_name].to_html()
+                    f"<h2>{df_name}:</h2>" + self.analysis_dataframes[df_name].to_html(index=False)
                 )
             return dataframes_as_html
         return ""

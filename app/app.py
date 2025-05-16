@@ -1,21 +1,24 @@
 from pathlib import Path
+import os
 from flask import Flask, flash, request, redirect, url_for, session
 from flask_session import Session
-from redis import Redis
 from werkzeug.utils import secure_filename
 import subprocess
-from eleVADR import Assessor
 
-UPLOAD_FOLDER = './uploads'
+from app.utils.eleVADR import Assessor
+
+# Declare the project root directory ("app", in this case) for relative paths
+PROJECT_ROOT = Path(__file__).resolve().parent
+UPLOAD_DIR = str(Path(PROJECT_ROOT, "data/uploads"))
+ZEEK_OUTPUT_DIR = str(Path(PROJECT_ROOT, "data/zeeks"))
+ZEEK_SCRIPTS_DIR= str(Path(PROJECT_ROOT, "data/zeek_scripts"))
+
 ALLOWED_EXTENSIONS = {'pcap'}
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-SESSION_TYPE = 'redis'
-SESSION_REDIS = Redis(host='localhost', port=6379)
+app.config['UPLOAD_FOLDER'] = UPLOAD_DIR
+app.secret_key = "g32NXqJSFibVS150Op4ugg" # NOT A REAL SECRET KEY - This is solely for development purposes
 app.config.from_object(__name__)
-Session(app)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -23,6 +26,7 @@ def allowed_file(filename):
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
+    print(UPLOAD_DIR, ZEEK_OUTPUT_DIR, ZEEK_SCRIPTS_DIR)
     if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -38,6 +42,8 @@ def upload_file():
             filename = secure_filename(file.filename)
             uploaded_filepath = Path(app.config['UPLOAD_FOLDER'], filename)
             session['uploaded_filepath'] = str(uploaded_filepath)
+            if filename in os.listdir(app.config['UPLOAD_FOLDER']):
+                os.remove(str(uploaded_filepath))
             file.save(uploaded_filepath)
             return redirect('/complete')
     return '''
@@ -53,8 +59,9 @@ def upload_file():
 @app.route('/complete')
 def run_analysis():
     elevadr = Assessor(path_to_pcap=session.get('uploaded_filepath', None),
-                       path_to_zeek="zeeks",
-                       path_to_zeek_scripts="zeek_scripts")
+                       path_to_zeek=ZEEK_OUTPUT_DIR,
+                       path_to_zeek_scripts=ZEEK_SCRIPTS_DIR
+    )
     elevadr.run_analysis()
     report = elevadr.generate_report()
     return f'''

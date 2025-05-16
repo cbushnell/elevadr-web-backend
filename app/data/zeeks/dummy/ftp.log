@@ -1,0 +1,16 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	ftp
+#open	2025-05-13-10-27-16
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	user	password	command	arg	mime_type	file_size	reply_code	reply_msg	data_channel.passive	data_channel.orig_h	data_channel.resp_h	data_channel.resp_p	fuid
+#types	time	string	addr	port	addr	port	string	string	string	string	string	count	count	string	bool	addr	addr	port	string
+1512843889.065975	CM23sf3UX0tOnmV5J2	192.251.11.33	4708	10.150.131.102	21	AOS_Iface_BHS	<hidden>	PASV	-	-	-	227	Entering Passive Mode (10,150,131,102,222,112).	T	192.251.11.33	10.150.131.102	56944	-
+1512843989.066843	CMU6tj3RU3RPJ82due	192.251.11.33	4725	10.150.131.102	21	AOS_Iface_BHS	<hidden>	PASV	-	-	-	227	Entering Passive Mode (10,150,131,102,222,135).	T	192.251.11.33	10.150.131.102	56967	-
+1512843989.070622	CMU6tj3RU3RPJ82due	192.251.11.33	4725	10.150.131.102	21	AOS_Iface_BHS	<hidden>	PASV	-	-	-	227	Entering Passive Mode (10,150,131,102,222,136).	T	192.251.11.33	10.150.131.102	56968	-
+1512843989.073142	CMU6tj3RU3RPJ82due	192.251.11.33	4725	10.150.131.102	21	AOS_Iface_BHS	<hidden>	RETR	ftp://10.150.131.102/OUTBOX/BCSflightdata_110128.xml	-	-	226	Transfer complete.	-	-	-	-	-
+1512844029.067849	CHg5u628EVIzzTSYz5	192.251.11.33	4732	10.150.131.102	21	AOS_Iface_BHS	<hidden>	PASV	-	-	-	227	Entering Passive Mode (10,150,131,102,222,144).	T	192.251.11.33	10.150.131.102	56976	-
+1512844089.068644	CUb5dQ1QnqZh3Fbxh3	192.251.11.33	4741	10.150.131.102	21	AOS_Iface_BHS	<hidden>	PASV	-	-	-	227	Entering Passive Mode (10,150,131,102,222,162).	T	192.251.11.33	10.150.131.102	56994	-
+1512843989.276232	CMU6tj3RU3RPJ82due	192.251.11.33	4725	10.150.131.102	21	AOS_Iface_BHS	<hidden>	DELE	ftp://10.150.131.102/OUTBOX/BCSflightdata_110128.xml	-	-	250	DELE command successful.	-	-	-	-	-
+#close	2025-05-13-10-27-16
