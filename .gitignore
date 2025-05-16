@@ -178,3 +178,7 @@ cython_debug/
 
 # Redis stuff:
 dump.rdb
+
+# Data Stuff
+.pcap
+.log
