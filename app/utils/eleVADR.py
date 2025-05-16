@@ -7,27 +7,25 @@ import json
 import yaml
 import os
 
-from app.utils.utils import convert_ips
+from app.utils.utils import convert_ips, get_list_of_manufacturers, load_consts
+
 
 class Assessor:
 
-    def __init__(
-        self,
-        path_to_pcap=None,
-        path_to_zeek=None,
-        path_to_zeek_scripts=None
-    ):
+    def __init__(self, path_to_pcap=None, path_to_zeek=None, path_to_zeek_scripts=None):
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
-        self.load_consts()
+        self.ics_manufacturers, self.ics_ports = load_consts()
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         self.zeekify()
         log_to_df = LogToDataFrame()
 
-        self.conn_df = log_to_df.create_dataframe(str(Path(self.upload_output_zeek_dir + "/conn.log")))
+        self.conn_df = log_to_df.create_dataframe(
+            str(Path(self.upload_output_zeek_dir + "/conn.log"))
+        )
         # todo: eventually only convert the unique values to optimize
         self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(convert_ips)
         self.conn_df["id.resp_h_int"] = self.conn_df["id.resp_h"].apply(convert_ips)
@@ -40,12 +38,6 @@ class Assessor:
             {}
         )  # Stored as a dict with the format {"dataframe name": dataframe}
 
-    def load_consts(self):
-        with open("data/CONST.yml") as f:
-            data = yaml.load(f, yaml.Loader)
-            self.ics_manufacturers = data["ICS_manufacturer_search_words"]
-            self.ics_ports = data["ICS_ports"]
-
     def ics_manufacturer_col(self):
         manufacturer_series = self.conn_df.apply(
             get_list_of_manufacturers,
@@ -54,16 +46,23 @@ class Assessor:
         )
         self.conn_df["ICS_manufacturer"] = manufacturer_series
         # Get rows where ICS Manufacturer is identified as source
-        print(self.conn_df[~self.conn_df["ICS_manufacturer"].isnull()])
+        self.analysis_dataframes["Manufacturers"] = self.conn_df[
+            ~self.conn_df["ICS_manufacturer"].isnull()
+        ]
 
     def zeekify(self):
         print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
         # Make a new subdirectory for the pcap analysis based on pcap name
-        
+
         if not os.path.isdir(self.upload_output_zeek_dir):
             os.mkdir(self.upload_output_zeek_dir)
         subprocess.check_output(
-            ["zeek", "-r", self.path_to_pcap, f"Log::default_logdir={self.upload_output_zeek_dir}"]
+            [
+                "zeek",
+                "-r",
+                self.path_to_pcap,
+                f"Log::default_logdir={self.upload_output_zeek_dir}",
+            ]
         )
         subprocess.check_output(
             [
@@ -84,9 +83,6 @@ class Assessor:
             ]
         )
 
-    # def ingest_pcap(self): # No longer required - done in the init/zeekify
-    #     pass
-
     def check_ports(self):
         # known_services.log filtered
         # print(self.known_services_df)
@@ -95,17 +91,17 @@ class Assessor:
             .groupby(["port_num", "service"], observed=True)
             .size()
             .reset_index()
-            .rename(columns={0:'count'})[["port_num", "service"]]
+            .rename(columns={0: "count"})[["port_num", "service"]]
         )
-        
+
         # Add ICS protocol ports
-        # print(self.ics_ports)
         unique_ks_df["service"] = unique_ks_df["service"].astype("object")
-        unique_ks_df['service'] = unique_ks_df['port_num'].map(self.ics_ports).fillna(unique_ks_df['service'])
+        unique_ks_df["service"] = (
+            unique_ks_df["port_num"].map(self.ics_ports).fillna(unique_ks_df["service"])
+        )
         self.analysis_dataframes["Known Services"] = unique_ks_df
 
     def check_external(self):
-        # TODO: Move the timestamp to a non-index column, since those are removed during the HTML conversion
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
         problematic_internals = []
@@ -179,11 +175,8 @@ class Assessor:
         # uses PCAP and MAC information to identify potential PLCs
         pass
 
-    def check_nothing(self):
-        df = pd.DataFrame({"hosts": ["a", "b", "c"], "favorite_numbers": [123, 27, 8]})
-        self.analysis_dataframes["Dummy Frame"] = df
-
     def run_analysis(self):
+        self.ics_manufacturer_col()
         self.check_ports()
         self.check_external()
         # self.check_segmented()
@@ -192,29 +185,11 @@ class Assessor:
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
-                dataframes_as_html += (
-                    f"<h2>{df_name}:</h2>" + self.analysis_dataframes[df_name].to_html(index=False)
-                )
+                dataframes_as_html += f"<h2>{df_name}:</h2>" + self.analysis_dataframes[
+                    df_name
+                ].to_html(index=False)
             return dataframes_as_html
         return ""
-
-
-def get_list_of_manufacturers(row, ics_manufacturers):
-    """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""
-    with open("data/latest_oui_lookup.json") as f:
-        oui_lookup = json.load(f)
-    # load pcap
-    mac_addr = row["orig_l2_addr"]
-    oui = mac_addr[0:8].replace(":", "-").upper()
-    try:
-        manufacturer = oui_lookup[oui]
-    except:
-        return None
-    for man in ics_manufacturers:
-        if man in manufacturer:
-            return manufacturer
-
-    return None
 
 
 if __name__ == "__main__":
