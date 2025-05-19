@@ -46,7 +46,7 @@ def upload_file():
             if filename in os.listdir(app.config["UPLOAD_FOLDER"]):
                 os.remove(str(uploaded_filepath))
             file.save(uploaded_filepath)
-            return redirect("/complete")
+            return redirect("/report")
     return """
     <!doctype html>
     <title>Upload File for Analysis</title>
@@ -58,7 +58,7 @@ def upload_file():
     """
 
 
-@app.route("/complete")
+@app.route("/report")
 def run_analysis():
     elevadr = Assessor(
         path_to_pcap=session.get("uploaded_filepath", None),

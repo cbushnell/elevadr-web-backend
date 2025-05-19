@@ -185,9 +185,12 @@ class Assessor:
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
-                dataframes_as_html += f"<h2>{df_name}:</h2>" + self.analysis_dataframes[
-                    df_name
-                ].to_html(index=False)
+                if len(self.analysis_dataframes[df_name]) > 0:
+                    dataframes_as_html += f"<h2>{df_name}:</h2>" + self.analysis_dataframes[
+                        df_name
+                    ].to_html(index=False)
+                else:
+                    dataframes_as_html += f"<h2>{df_name}:</h2>" +"<body>Nothing to report.</body>"
             return dataframes_as_html
         return ""
 
