@@ -180,5 +180,5 @@ cython_debug/
 dump.rdb
 
 # Data Stuff
-.pcap
-.log
+*.pcap
+*.log
