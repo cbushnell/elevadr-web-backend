@@ -7,7 +7,7 @@ import json
 import yaml
 import os
 
-from app.utils.utils import convert_ips, get_list_of_manufacturers, load_consts
+from app.utils.utils import convert_ips, convert_ip_to_str, get_list_of_manufacturers, load_consts
 
 
 class Assessor:
@@ -176,21 +176,46 @@ class Assessor:
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
 
     def identify_local_vlans(self):
-        unique_local_addresses = self.conn_df.where(self.conn_df["local_orig"] == "T")[
-            "id.orig_h_int"
-        ].unique()
+        # unique_local_addresses = self.conn_df.where(self.conn_df["local_orig"] == "T")[
+        #     "id.orig_h_int"
+        # ].unique()
         # only get local <-> local instead of all of conn.df
-        # locals_only = self.conn_df[(self.conn_df["local_orig"] == 'T') & (self.conn_df["local_resp"] == "T")]
+        locals_conn_indices = self.conn_df[
+            (self.conn_df["local_orig"] == "T") & (self.conn_df["local_resp"] == "T")
+        ].index
+        self.conn_df["/24"] = self.conn_df["id.orig_h"].apply(convert_ips)
+        self.conn_df["/24_resp"] = self.conn_df["id.resp_h"].apply(convert_ips)
+        # locals_only = locals_only[
+        #     "id.orig_h_int"
+        # ].unique()
         # print(list(locals_only))
-        # shift all right 8
-        self.conn_df["/24"] = self.conn_df["id.orig_h_int"].apply(lambda x: int(x >> 8))
-        self.conn_df["/24_resp"] = self.conn_df["id.resp_h_int"].apply(
+        # # shift all right 8
+        # ip_df = pd.DataFrame({"device.unmapped.ip_int": local_ip_ints})
+        self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x >> 8))
+        self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(
             lambda x: int(x >> 8)
         )
-        # self.conn_df.where(self.conn_df["local_orig"] == "T").groupby(["/24"]).count()
-        # cidrs = list(self.conn_df.where(self.conn_df["local_orig"] == "T").groupby(["/24"]).count().index)
-        # dst_cidrs =
-        # return cidrs
+        # counts = conn_df.where(conn_df["local_orig"] == "T").groupby(["/24"]).count()
+        cidrs = pd.Series(self.conn_df.groupby(["/24"]).count().index)
+
+        self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
+        self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
+        not_included_indices = list(set(self.conn_df.index).difference(locals_conn_indices))
+        print(not_included_indices)
+        self.conn_df.loc[not_included_indices, "/24"] = "NaN"
+        self.conn_df.loc[not_included_indices, "/24_resp"] = "NaN"
+        
+        # # dst_cidrs =
+        return cidrs
+
+    def identify_subnets(self, cross_segment_traffic):
+        # Given output of check_segmented, identify where our guess at networks might be wrong
+        # placeholder logic for if too much cross traffic is occuring
+        if len(cross_segment_traffic) > 0:
+            # todo: Change return value to be more useful (aggregate of addresses? particularly sus ones?)
+            self.analysis_dataframes[
+                "Network Segmentation Issues - Likely Flat Network"
+            ] = cross_segment_traffic
 
     def check_segmented(self):
         # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
@@ -201,18 +226,8 @@ class Assessor:
             & (self.conn_df["local_orig"] == "T")
             & (self.conn_df["local_resp"] == "T")
         ]
+        self.identify_subnets(cross_segment_traffic)
         return cross_segment_traffic
-
-    def identify_subnets(self, cross_segment_traffic):
-        # Given output of check_segmented, identify where our guess at networks might be wrong
-        # placeholder logic for if too much cross traffic is occuring
-        if len(cross_segment_traffic) > 20:
-            # todo: Change return value to be more useful (aggregate of addresses? particularly sus ones?)
-            self.analysis_dataframes[
-                "Network Segmentation Issues - Likely Flat Network"
-            ] = cross_segment_traffic
-
-        pass
 
     def user_validation_approach(self):
         pass
@@ -229,7 +244,7 @@ class Assessor:
         self.ics_manufacturer_col()
         self.check_ports()
         self.check_external()
-        # self.check_segmented()
+        self.check_segmented()
 
     def generate_report(self):
         if self.analysis_dataframes != {}:
