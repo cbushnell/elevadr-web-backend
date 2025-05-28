@@ -46,9 +46,18 @@ class Assessor:
         )
         self.conn_df["ICS_manufacturer"] = manufacturer_series
         # Get rows where ICS Manufacturer is identified as source
-        self.analysis_dataframes["Manufacturers"] = self.conn_df[
+        matched_manufacturers_df = self.conn_df[
             ~self.conn_df["ICS_manufacturer"].isnull()
         ]
+        matched_manufacturers_df = matched_manufacturers_df.rename(
+            columns={
+                "id.orig_h": "device.ip",
+                "orig_l2_addr": "device.mac",
+                "ICS_manufacturer": "device.vendor_name",
+            }
+        )[["device.ip", "device.mac", "device.vendor_name"]]
+        matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
+        self.analysis_dataframes["Manufacturers"] = matched_manufacturers_df
 
     def zeekify(self):
         print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
@@ -88,23 +97,56 @@ class Assessor:
         # print(self.known_services_df)
         unique_ks_df = (
             self.known_services_df[["port_num", "service"]]
-            .groupby(["port_num", "service"], observed=True)
-            .size()
-            .reset_index()
-            .rename(columns={0: "count"})[["port_num", "service"]]
+            .drop_duplicates("port_num")
+            .rename(
+                columns={
+                    "port_num": "dst_endpoint.port",
+                    "service": "connection_info.protocol_name",
+                }
+            )
         )
-
         # Add ICS protocol ports
-        unique_ks_df["service"] = unique_ks_df["service"].astype("object")
-        unique_ks_df["service"] = (
-            unique_ks_df["port_num"].map(self.ics_ports).fillna(unique_ks_df["service"])
+        unique_ks_df["connection_info.protocol_name"] = unique_ks_df[
+            "connection_info.protocol_name"
+        ].astype("object")
+        unique_ks_df["connection_info.protocol_name"] = (
+            unique_ks_df["dst_endpoint.port"]
+            .map(self.ics_ports)
+            .fillna(unique_ks_df["connection_info.protocol_name"])
         )
-        self.analysis_dataframes["Known Services"] = unique_ks_df
+        self.analysis_dataframes["Services"] = unique_ks_df
 
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
         problematic_internals = []
+
+        display_cols_conversion = {
+            "id.orig_h": "src_endpoint.ip",
+            "id.orig_p": "src_endpoint.port",
+            "id.resp_h": "dst_endpoint.ip",
+            "id.resp_p": "dst_endpoint.port",
+            "proto": "connection_info.protocol_name",
+            "service": "network_activity.category",  # This is probably inaccurate - OCSF tracks these are individual categories of the Network Activity category
+            "orig_pkts": "traffic.packets_out",
+            "orig_ip_bytes": "traffic.bytes_out",
+            "resp_pkts": "traffic.packets_in",
+            "resp_ip_bytes": "traffic.bytes_in",
+        }
+
+        display_cols = [
+            "src_endpoint.ip",
+            "src_endpoint.port",
+            "dst_endpoint.ip",
+            "dst_endpoint.port",
+            "connection_info.protocol_name",
+            "network_activity.category",
+            "traffic.packets_out",
+            "traffic.bytes_out",
+            "traffic.packets_in",
+            "traffic.bytes_in",
+        ]
+
         conn_data = self.conn_df[["local_orig", "local_resp"]].groupby(
             ["local_orig", "local_resp"], observed=True
         )
@@ -118,10 +160,18 @@ class Assessor:
         # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
             "Suspicious Internal Connections from External Sources"
-        ] = problematic_internals
+        ] = problematic_internals.rename(columns=display_cols_conversion)[
+            display_cols
+        ].sort_values(
+            ["src_endpoint.ip", "dst_endpoint.ip"]
+        )
         self.analysis_dataframes[
             "Suspicious External Connections from Internal Sources"
-        ] = problematic_externals
+        ] = problematic_externals.rename(columns=display_cols_conversion)[
+            display_cols
+        ].sort_values(
+            ["src_endpoint.ip", "dst_endpoint.ip"]
+        )
 
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
 
@@ -186,11 +236,14 @@ class Assessor:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
                 if len(self.analysis_dataframes[df_name]) > 0:
-                    dataframes_as_html += f"<h2>{df_name}:</h2>" + self.analysis_dataframes[
-                        df_name
-                    ].to_html(index=False)
+                    dataframes_as_html += (
+                        f"<h2>{df_name}:</h2>"
+                        + self.analysis_dataframes[df_name].to_html(index=False)
+                    )
                 else:
-                    dataframes_as_html += f"<h2>{df_name}:</h2>" +"<body>Nothing to report.</body>"
+                    dataframes_as_html += (
+                        f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
+                    )
             return dataframes_as_html
         return ""
 

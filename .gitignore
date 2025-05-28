@@ -182,3 +182,8 @@ dump.rdb
 # Data Stuff
 *.pcap
 *.log
+uploads/
+zeeks/
+
+# Exploratory Work
+*.ipynb
