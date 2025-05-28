@@ -7,7 +7,12 @@ import json
 import yaml
 import os
 
-from app.utils.utils import convert_ips, convert_ip_to_str, get_list_of_manufacturers, load_consts
+from app.utils.utils import (
+    convert_ips,
+    convert_ip_to_str,
+    get_list_of_manufacturers,
+    load_consts,
+)
 
 
 class Assessor:
@@ -192,30 +197,62 @@ class Assessor:
         # # shift all right 8
         # ip_df = pd.DataFrame({"device.unmapped.ip_int": local_ip_ints})
         self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x >> 8))
-        self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(
-            lambda x: int(x >> 8)
-        )
+        self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(lambda x: int(x >> 8))
         # counts = conn_df.where(conn_df["local_orig"] == "T").groupby(["/24"]).count()
         cidrs = pd.Series(self.conn_df.groupby(["/24"]).count().index)
 
-        self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
-        self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
-        not_included_indices = list(set(self.conn_df.index).difference(locals_conn_indices))
+        self.conn_df["/24"] = (
+            self.conn_df["/24"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
+        )
+        self.conn_df["/24_resp"] = (
+            self.conn_df["/24_resp"]
+            .apply(lambda x: int(x << 8))
+            .apply(convert_ip_to_str)
+        )
+        not_included_indices = list(
+            set(self.conn_df.index).difference(locals_conn_indices)
+        )
         print(not_included_indices)
         self.conn_df.loc[not_included_indices, "/24"] = "NaN"
         self.conn_df.loc[not_included_indices, "/24_resp"] = "NaN"
-        
+
         # # dst_cidrs =
         return cidrs
 
     def identify_subnets(self, cross_segment_traffic):
+        display_cols_conversion = {
+            "id.orig_h": "src_endpoint.ip",
+            "id.orig_p": "src_endpoint.port",
+            "id.resp_h": "dst_endpoint.ip",
+            "id.resp_p": "dst_endpoint.port",
+            "proto": "connection_info.protocol_name",
+            "service": "network_activity.category",  # This is probably inaccurate - OCSF tracks these are individual categories of the Network Activity category
+            "/24": "connection_info.unmapped.src_subnet", # 
+            "/24_resp": "connection_info.unmapped.dst_subnet"
+        }
+
+        display_cols = [
+            "src_endpoint.ip",
+            "src_endpoint.port",
+            "dst_endpoint.ip",
+            "dst_endpoint.port",
+            "connection_info.protocol_name",
+            "network_activity.category",
+            "connection_info.unmapped.src_subnet",
+            "connection_info.unmapped.dst_subnet"
+        ]
+
         # Given output of check_segmented, identify where our guess at networks might be wrong
         # placeholder logic for if too much cross traffic is occuring
         if len(cross_segment_traffic) > 0:
             # todo: Change return value to be more useful (aggregate of addresses? particularly sus ones?)
+            cross_segment_traffic = cross_segment_traffic.rename(
+                columns=display_cols_conversion
+            )
+            cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes[
                 "Network Segmentation Issues - Likely Flat Network"
-            ] = cross_segment_traffic
+            ] = cross_segment_traffic_display.drop_duplicates()
 
     def check_segmented(self):
         # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
