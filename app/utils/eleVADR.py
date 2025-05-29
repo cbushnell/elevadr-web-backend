@@ -17,10 +17,11 @@ from app.utils.utils import (
 
 class Assessor:
 
-    def __init__(self, path_to_pcap=None, path_to_zeek=None, path_to_zeek_scripts=None):
+    def __init__(self, path_to_pcap=None, path_to_zeek=None, path_to_zeek_scripts=None, path_to_data=None):
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
+        self.path_to_data = path_to_data
         self.ics_manufacturers, self.ics_ports = load_consts()
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
@@ -35,9 +36,13 @@ class Assessor:
         self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(convert_ips)
         self.conn_df["id.resp_h_int"] = self.conn_df["id.resp_h"].apply(convert_ips)
         self.conn_df["id.resp_h"] = self.conn_df["id.resp_h"]
+
         self.known_services_df = log_to_df.create_dataframe(
             Path(self.upload_output_zeek_dir + "/known_services.log")
-        )  # Exploring how to actually generate this file
+        )
+
+        self.known_ports_df = pd.read_json(Path(self.path_to_data + "/ports.json"), orient="index")
+        self.known_ports_df.index.name = "Port Number"
 
         self.analysis_dataframes = (
             {}
@@ -99,28 +104,34 @@ class Assessor:
 
     def check_ports(self):
         # known_services.log filtered
-        # print(self.known_services_df)
-        unique_ks_df = (
-            self.known_services_df[["port_num", "service"]]
-            .drop_duplicates("port_num")
-            .rename(
-                columns={
-                    "port_num": "dst_endpoint.port",
-                    "service": "connection_info.protocol_name",
-                }
-            )
-        )
-        # Add ICS protocol ports
-        unique_ks_df["connection_info.protocol_name"] = unique_ks_df[
-            "connection_info.protocol_name"
-        ].astype("object")
-        unique_ks_df["connection_info.protocol_name"] = (
-            unique_ks_df["dst_endpoint.port"]
-            .map(self.ics_ports)
-            .fillna(unique_ks_df["connection_info.protocol_name"])
-        )
-        self.analysis_dataframes["Services"] = unique_ks_df
 
+        display_cols_conversion = {
+            "Port Number": "connection_info.port", 
+            "Service Name": "connection_info.unmapped.service_name", 
+            "Transport Protocol": "connection_info.protocol_name", 
+            "Description": "connection_info.unmapped.service_description"
+        }
+
+        display_cols = [
+            "connection_info.port", 
+            "connection_info.unmapped.service_name", 
+            "connection_info.protocol_name",
+            "connection_info.unmapped.service_description"
+        ]
+
+        mapped_ports = [int(p) for p in list(set(self.known_ports_df.index).intersection(self.known_services_df["port_num"]))]
+        unmapped_ports = [int(p) for p in list(set(self.known_services_df["port_num"]).difference(self.known_ports_df.index))]
+        print(self.known_ports_df.index)
+        print(mapped_ports)
+        port_to_service_map = self.known_ports_df.loc[mapped_ports, :]
+        port_to_service_map["Port Number"] = self.known_ports_df.loc[mapped_ports].index
+        port_to_service_map = port_to_service_map.rename(
+            columns=display_cols_conversion
+        )
+        self.analysis_dataframes[
+            "Known Services"
+        ] = port_to_service_map[display_cols].sort_values("connection_info.port")
+        
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []

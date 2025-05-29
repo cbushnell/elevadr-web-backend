@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 UPLOAD_DIR = str(Path(PROJECT_ROOT, "data/uploads"))
 ZEEK_OUTPUT_DIR = str(Path(PROJECT_ROOT, "data/zeeks"))
 ZEEK_SCRIPTS_DIR = str(Path(PROJECT_ROOT, "data/zeek_scripts"))
+DATA_DIR = str(Path(PROJECT_ROOT, "data/"))
 
 ALLOWED_EXTENSIONS = {"pcap"}
 
@@ -27,7 +28,7 @@ def allowed_file(filename):
 
 @app.route("/", methods=["GET", "POST"])
 def upload_file():
-    print(UPLOAD_DIR, ZEEK_OUTPUT_DIR, ZEEK_SCRIPTS_DIR)
+    print(UPLOAD_DIR, ZEEK_OUTPUT_DIR, ZEEK_SCRIPTS_DIR, DATA_DIR)
     if request.method == "POST":
         # check if the post request has the file part
         if "file" not in request.files:
@@ -64,6 +65,7 @@ def run_analysis():
         path_to_pcap=session.get("uploaded_filepath", None),
         path_to_zeek=ZEEK_OUTPUT_DIR,
         path_to_zeek_scripts=ZEEK_SCRIPTS_DIR,
+        path_to_data=DATA_DIR
     )
     elevadr.run_analysis()
     report = elevadr.generate_report()
