@@ -14,6 +14,9 @@ def convert_ip_to_str(ip):
         return str(ipaddress.IPv4Address(ip))
     except ipaddress.AddressValueError:
         return str(ipaddress.IPv6Address(ip))
+    
+def check_ip_version(ip):
+    return ipaddress.ip_address(str(ip)).version
 
 def get_list_of_manufacturers(row, ics_manufacturers):
     """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""

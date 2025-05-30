@@ -12,6 +12,7 @@ from app.utils.utils import (
     convert_ip_to_str,
     get_list_of_manufacturers,
     load_consts,
+    check_ip_version,
 )
 
 
@@ -39,9 +40,9 @@ class Assessor:
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
         # todo: eventually only convert the unique values to optimize
-        self.conn_df["id.orig_h_int"] = self.conn_df["id.orig_h"].apply(convert_ips)
-        self.conn_df["id.resp_h_int"] = self.conn_df["id.resp_h"].apply(convert_ips)
-        self.conn_df["id.resp_h"] = self.conn_df["id.resp_h"]
+        self.conn_df["connection_info.protocol_ver"] = self.conn_df["id.orig_h"].apply(
+            check_ip_version
+        )
 
         self.known_services_df = log_to_df.create_dataframe(
             Path(self.upload_output_zeek_dir + "/known_services.log")
@@ -131,20 +132,19 @@ class Assessor:
             int(p)
             for p in list(
                 set(self.known_ports_df.index).intersection(
-                    self.known_services_df["port_num"]
+                    self.conn_df["id.resp_p"]
                 )
             )
         ]
         unmapped_ports = [
             int(p)
             for p in list(
-                set(self.known_services_df["port_num"]).difference(
+                set(self.conn_df["id.resp_p"]).difference(
                     self.known_ports_df.index
                 )
             )
         ]
-        print(self.known_ports_df.index)
-        print(mapped_ports)
+
         port_to_service_map = self.known_ports_df.loc[mapped_ports, :]
         port_to_service_map["Port Number"] = self.known_ports_df.loc[mapped_ports].index
         port_to_service_map = port_to_service_map.rename(
@@ -214,42 +214,33 @@ class Assessor:
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
 
     def identify_local_vlans(self):
-        # unique_local_addresses = self.conn_df.where(self.conn_df["local_orig"] == "T")[
-        #     "id.orig_h_int"
-        # ].unique()
-        # only get local <-> local instead of all of conn.df
         locals_conn_indices = self.conn_df[
             (self.conn_df["local_orig"] == "T") & (self.conn_df["local_resp"] == "T")
         ].index
         self.conn_df["/24"] = self.conn_df["id.orig_h"].apply(convert_ips)
         self.conn_df["/24_resp"] = self.conn_df["id.resp_h"].apply(convert_ips)
-        # locals_only = locals_only[
-        #     "id.orig_h_int"
-        # ].unique()
-        # print(list(locals_only))
-        # # shift all right 8
-        # ip_df = pd.DataFrame({"device.unmapped.ip_int": local_ip_ints})
         self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x >> 8))
         self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(lambda x: int(x >> 8))
-        # counts = conn_df.where(conn_df["local_orig"] == "T").groupby(["/24"]).count()
         cidrs = pd.Series(self.conn_df.groupby(["/24"]).count().index)
 
         self.conn_df["/24"] = (
-            self.conn_df["/24"].apply(lambda x: int(x << 8)).apply(convert_ip_to_str)
+            self.conn_df["/24"]
+            .apply(lambda x: int(x << 8))
+            .apply(convert_ip_to_str)
+            .astype("str")
         )
         self.conn_df["/24_resp"] = (
             self.conn_df["/24_resp"]
             .apply(lambda x: int(x << 8))
             .apply(convert_ip_to_str)
+            .astype("str")
         )
         not_included_indices = list(
             set(self.conn_df.index).difference(locals_conn_indices)
         )
-        print(not_included_indices)
         self.conn_df.loc[not_included_indices, "/24"] = "NaN"
         self.conn_df.loc[not_included_indices, "/24_resp"] = "NaN"
 
-        # # dst_cidrs =
         return cidrs
 
     def identify_subnets(self, cross_segment_traffic):
@@ -288,34 +279,67 @@ class Assessor:
             ] = cross_segment_traffic_display.drop_duplicates()
 
     def check_segmented(self):
-        # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
-        self.identify_local_vlans()
-        # todo-get this list filtered to local_orig
-        cross_segment_traffic = self.conn_df[
-            (self.conn_df["/24"] != self.conn_df["/24_resp"])
-            & (self.conn_df["local_orig"] == "T")
-            & (self.conn_df["local_resp"] == "T")
-        ]
-        self.identify_subnets(cross_segment_traffic)
-        return cross_segment_traffic
+        # Going to skip anything with IPv6 for now, since it has a different subnet structure
+        if "6" not in self.conn_df["connection_info.protocol_ver"].unique():
+            # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
+            self.identify_local_vlans()
+            # todo-get this list filtered to local_orig
+            cross_segment_traffic = self.conn_df[
+                (self.conn_df["/24"] != self.conn_df["/24_resp"])
+                & (self.conn_df["local_orig"] == "T")
+                & (self.conn_df["local_resp"] == "T")
+            ]
+            self.identify_subnets(cross_segment_traffic)
+            return cross_segment_traffic
 
     def identify_chatty_systems(self):
-        dsts_per_source = self.conn_df["id.orig_h"].value_counts()
-        # Hosts talking to many internal IPs, indicating either a server or someone enumerating the network
-        dsts_per_source_local = self.conn_df.loc[self.conn_df["local_resp"] == "T"][
-            "id.orig_h"
-        ].value_counts()
 
-        print(dsts_per_source)
-        print(dsts_per_source_local)
+        display_cols_conversion = {
+            "id.orig_h": "src_endpoint.ip",
+            "id.resp_h": "total_dst",
+        }
+
+        display_cols = ["src_endpoint.ip", "total_dst"]
+
+        dsts_per_source = self.conn_df.groupby(by=["id.orig_h"])["id.resp_h"].nunique()
+
+        # Hosts talking to many internal IPs, indicating either a server or someone enumerating the network
+        dsts_per_source_local = (
+            self.conn_df[self.conn_df["local_resp"] == "T"]
+            .groupby(by=["id.orig_h"])["id.resp_h"]
+            .nunique()
+        )
+
         # Represents hosts that are communicating with many external IPs, potentially representing C2
         external_contact_counts = dsts_per_source - dsts_per_source_local
+
+        dsts_per_source_local_df = (
+            dsts_per_source_local.to_frame()
+            .reset_index()
+            .rename(columns=display_cols_conversion)
+            .sort_values("total_dst")
+        )
+        external_contact_counts_df = (
+            external_contact_counts.to_frame()
+            .reset_index()
+            .rename(columns=display_cols_conversion)
+            .sort_values("total_dst")
+        )
+
+        # Drop hosts with no listed communications
+        dsts_per_source_local_df = dsts_per_source_local_df[
+            dsts_per_source_local_df["total_dst"] != 0
+        ]
+        external_contact_counts_df = external_contact_counts_df[
+            external_contact_counts_df["total_dst"] != 0
+        ]
+
         self.analysis_dataframes[
             "Hosts communicating with many hosts, indicating servers adversary enumeration"
-        ] = dsts_per_source_local
+        ] = pd.DataFrame(dsts_per_source_local_df)
         self.analysis_dataframes[
             "Hosts communicating with many external IPs, potentially indicating C2"
-        ] = external_contact_counts
+        ] = pd.DataFrame(external_contact_counts_df)
 
     def user_validation_approach(self):
         pass
@@ -333,6 +357,7 @@ class Assessor:
         self.check_ports()
         self.check_external()
         self.check_segmented()
+        self.identify_chatty_systems()
 
     def generate_report(self):
         if self.analysis_dataframes != {}:
