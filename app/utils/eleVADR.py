@@ -17,7 +17,13 @@ from app.utils.utils import (
 
 class Assessor:
 
-    def __init__(self, path_to_pcap=None, path_to_zeek=None, path_to_zeek_scripts=None, path_to_data=None):
+    def __init__(
+        self,
+        path_to_pcap=None,
+        path_to_zeek=None,
+        path_to_zeek_scripts=None,
+        path_to_data=None,
+    ):
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
@@ -26,7 +32,7 @@ class Assessor:
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
-        self.zeekify()
+        # self.zeekify()
         log_to_df = LogToDataFrame()
 
         self.conn_df = log_to_df.create_dataframe(
@@ -41,7 +47,9 @@ class Assessor:
             Path(self.upload_output_zeek_dir + "/known_services.log")
         )
 
-        self.known_ports_df = pd.read_json(Path(self.path_to_data + "/ports.json"), orient="index")
+        self.known_ports_df = pd.read_json(
+            Path(self.path_to_data + "/ports.json"), orient="index"
+        )
         self.known_ports_df.index.name = "Port Number"
 
         self.analysis_dataframes = (
@@ -106,21 +114,35 @@ class Assessor:
         # known_services.log filtered
 
         display_cols_conversion = {
-            "Port Number": "connection_info.port", 
-            "Service Name": "connection_info.unmapped.service_name", 
-            "Transport Protocol": "connection_info.protocol_name", 
-            "Description": "connection_info.unmapped.service_description"
+            "Port Number": "connection_info.port",
+            "Service Name": "connection_info.unmapped.service_name",
+            "Transport Protocol": "connection_info.protocol_name",
+            "Description": "connection_info.unmapped.service_description",
         }
 
         display_cols = [
-            "connection_info.port", 
-            "connection_info.unmapped.service_name", 
+            "connection_info.port",
+            "connection_info.unmapped.service_name",
             "connection_info.protocol_name",
-            "connection_info.unmapped.service_description"
+            "connection_info.unmapped.service_description",
         ]
 
-        mapped_ports = [int(p) for p in list(set(self.known_ports_df.index).intersection(self.known_services_df["port_num"]))]
-        unmapped_ports = [int(p) for p in list(set(self.known_services_df["port_num"]).difference(self.known_ports_df.index))]
+        mapped_ports = [
+            int(p)
+            for p in list(
+                set(self.known_ports_df.index).intersection(
+                    self.known_services_df["port_num"]
+                )
+            )
+        ]
+        unmapped_ports = [
+            int(p)
+            for p in list(
+                set(self.known_services_df["port_num"]).difference(
+                    self.known_ports_df.index
+                )
+            )
+        ]
         print(self.known_ports_df.index)
         print(mapped_ports)
         port_to_service_map = self.known_ports_df.loc[mapped_ports, :]
@@ -128,10 +150,10 @@ class Assessor:
         port_to_service_map = port_to_service_map.rename(
             columns=display_cols_conversion
         )
-        self.analysis_dataframes[
-            "Known Services"
-        ] = port_to_service_map[display_cols].sort_values("connection_info.port")
-        
+        self.analysis_dataframes["Known Services"] = port_to_service_map[
+            display_cols
+        ].sort_values("connection_info.port")
+
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
@@ -238,8 +260,8 @@ class Assessor:
             "id.resp_p": "dst_endpoint.port",
             "proto": "connection_info.protocol_name",
             "service": "network_activity.category",  # This is probably inaccurate - OCSF tracks these are individual categories of the Network Activity category
-            "/24": "connection_info.unmapped.src_subnet", # 
-            "/24_resp": "connection_info.unmapped.dst_subnet"
+            "/24": "connection_info.unmapped.src_subnet",  #
+            "/24_resp": "connection_info.unmapped.dst_subnet",
         }
 
         display_cols = [
@@ -250,7 +272,7 @@ class Assessor:
             "connection_info.protocol_name",
             "network_activity.category",
             "connection_info.unmapped.src_subnet",
-            "connection_info.unmapped.dst_subnet"
+            "connection_info.unmapped.dst_subnet",
         ]
 
         # Given output of check_segmented, identify where our guess at networks might be wrong
@@ -276,6 +298,24 @@ class Assessor:
         ]
         self.identify_subnets(cross_segment_traffic)
         return cross_segment_traffic
+
+    def identify_chatty_systems(self):
+        dsts_per_source = self.conn_df["id.orig_h"].value_counts()
+        # Hosts talking to many internal IPs, indicating either a server or someone enumerating the network
+        dsts_per_source_local = self.conn_df.loc[self.conn_df["local_resp"] == "T"][
+            "id.orig_h"
+        ].value_counts()
+
+        print(dsts_per_source)
+        print(dsts_per_source_local)
+        # Represents hosts that are communicating with many external IPs, potentially representing C2
+        external_contact_counts = dsts_per_source - dsts_per_source_local
+        self.analysis_dataframes[
+            "Hosts communicating with many hosts, indicating servers adversary enumeration"
+        ] = dsts_per_source_local
+        self.analysis_dataframes[
+            "Hosts communicating with many external IPs, potentially indicating C2"
+        ] = external_contact_counts
 
     def user_validation_approach(self):
         pass
@@ -313,11 +353,12 @@ class Assessor:
 
 if __name__ == "__main__":
 
-    a = Assessor("data/Module_7_IR_Lab_1.pcap", "zeeks", "zeek_scripts")
-    a.check_segmented()
+    a = Assessor("data/Module_7_IR_Lab_1.pcap", "zeeks", "zeek_scripts", "data")
+    a.identify_chatty_systems()
+    # a.check_segmented()
     # a.identify_local_vlans()
-    a.check_external()
-    a.ics_manufacturer_col()
+    # a.check_external()
+    # a.ics_manufacturer_col()
     # print(a.conn_df)
     # print(a.known_services_df)
     # a.run_analysis()
