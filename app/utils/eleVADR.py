@@ -33,7 +33,7 @@ class Assessor:
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
-        # self.zeekify()
+        self.zeekify()
         log_to_df = LogToDataFrame()
 
         self.conn_df = log_to_df.create_dataframe(
@@ -197,14 +197,14 @@ class Assessor:
         # print(f"problematic public network connections into the network: {problematic_externals}")
         # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
-            "Suspicious Internal Connections from External Sources"
+            "Suspicious Connections from Internal to External Sources"
         ] = problematic_internals.rename(columns=display_cols_conversion)[
             display_cols
         ].sort_values(
             ["src_endpoint.ip", "dst_endpoint.ip"]
         )
         self.analysis_dataframes[
-            "Suspicious External Connections from Internal Sources"
+            "Suspicious Connections from External to Internal Sources"
         ] = problematic_externals.rename(columns=display_cols_conversion)[
             display_cols
         ].sort_values(
@@ -275,7 +275,7 @@ class Assessor:
             )
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes[
-                "Network Segmentation Issues - Likely Flat Network"
+                "Cross Segment Communication"
             ] = cross_segment_traffic_display.drop_duplicates()
 
     def check_segmented(self):
@@ -335,11 +335,17 @@ class Assessor:
         ]
 
         self.analysis_dataframes[
-            "Hosts communicating with many hosts, indicating servers adversary enumeration"
+            "Communication to Local Hosts"
         ] = pd.DataFrame(dsts_per_source_local_df)
         self.analysis_dataframes[
-            "Hosts communicating with many external IPs, potentially indicating C2"
+            "Communication to External Hosts"
         ] = pd.DataFrame(external_contact_counts_df)
+
+    def dump_to_json(self):
+        for df_k in self.analysis_dataframes.keys():
+            df = self.analysis_dataframes[df_k]
+            df_name = df_k.replace(" ", "_")
+            df.to_json(str(Path(self.upload_output_zeek_dir, df_k + ".json", indent=4)))
 
     def user_validation_approach(self):
         pass
@@ -358,6 +364,7 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
+        self.dump_to_json()
 
     def generate_report(self):
         if self.analysis_dataframes != {}:
