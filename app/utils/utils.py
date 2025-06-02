@@ -18,9 +18,9 @@ def convert_ip_to_str(ip):
 def check_ip_version(ip):
     return ipaddress.ip_address(str(ip)).version
 
-def get_list_of_manufacturers(row, ics_manufacturers):
+def get_list_of_manufacturers(oui_path, row, ics_manufacturers):
     """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""
-    with open("data/latest_oui_lookup.json") as f:
+    with open(oui_path) as f:
         oui_lookup = json.load(f)
     # load pcap
     mac_addr = row["orig_l2_addr"]
@@ -36,7 +36,7 @@ def get_list_of_manufacturers(row, ics_manufacturers):
     return None
 
 
-def load_consts():
-    with open("data/CONST.yml") as f:
+def load_consts(consts_path):
+    with open(consts_path) as f:
         data = yaml.load(f, yaml.Loader)
-        return data["ICS_manufacturer_search_words"], data["ICS_ports"]
+        return data["ICS_manufacturer_search_words"]

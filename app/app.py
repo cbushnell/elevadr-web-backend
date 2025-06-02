@@ -9,10 +9,12 @@ from app.utils.eleVADR import Assessor
 
 # Declare the project root directory ("app", in this case) for relative paths
 PROJECT_ROOT = Path(__file__).resolve().parent
-UPLOAD_DIR = str(Path(PROJECT_ROOT, "data/uploads"))
-ZEEK_OUTPUT_DIR = str(Path(PROJECT_ROOT, "data/zeeks"))
-ZEEK_SCRIPTS_DIR = str(Path(PROJECT_ROOT, "data/zeek_scripts"))
-DATA_DIR = str(Path(PROJECT_ROOT, "data/"))
+DATA_DIR = str(Path(PROJECT_ROOT, "data"))
+ASSESSOR_DATA_DIR = str(Path(DATA_DIR, "assessor_data"))
+UPLOAD_DIR = str(Path(DATA_DIR, "uploads"))
+ZEEK_OUTPUT_DIR = str(Path(DATA_DIR, "zeeks"))
+ZEEK_SCRIPTS_DIR = str(Path(DATA_DIR, "zeek_scripts"))
+
 
 ALLOWED_EXTENSIONS = {"pcap"}
 
@@ -65,7 +67,7 @@ def run_analysis():
         path_to_pcap=session.get("uploaded_filepath", None),
         path_to_zeek=ZEEK_OUTPUT_DIR,
         path_to_zeek_scripts=ZEEK_SCRIPTS_DIR,
-        path_to_data=DATA_DIR
+        path_to_assessor_data=ASSESSOR_DATA_DIR
     )
     elevadr.run_analysis()
     report = elevadr.generate_report()

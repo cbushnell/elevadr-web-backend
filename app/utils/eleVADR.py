@@ -23,13 +23,15 @@ class Assessor:
         path_to_pcap=None,
         path_to_zeek=None,
         path_to_zeek_scripts=None,
-        path_to_data=None,
+        path_to_assessor_data=None,
     ):
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
-        self.path_to_data = path_to_data
-        self.ics_manufacturers, self.ics_ports = load_consts()
+        self.path_to_assessor_data = path_to_assessor_data
+        self.ics_manufacturers = load_consts(
+            str(Path(self.path_to_assessor_data, "CONST.yml"))
+        )
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
@@ -49,7 +51,7 @@ class Assessor:
         )
 
         self.known_ports_df = pd.read_json(
-            Path(self.path_to_data + "/ports.json"), orient="index"
+            Path(self.path_to_assessor_data + "/ports.json"), orient="index"
         )
         self.known_ports_df.index.name = "Port Number"
 
@@ -59,9 +61,12 @@ class Assessor:
 
     def ics_manufacturer_col(self):
         manufacturer_series = self.conn_df.apply(
-            get_list_of_manufacturers,
+            lambda row: get_list_of_manufacturers(
+                str(Path(self.path_to_assessor_data, "latest_oui_lookup.json")),
+                row,
+                self.ics_manufacturers,
+            ),
             axis=1,
-            ics_manufacturers=self.ics_manufacturers,
         )
         self.conn_df["ICS_manufacturer"] = manufacturer_series
         # Get rows where ICS Manufacturer is identified as source
@@ -119,6 +124,7 @@ class Assessor:
             "Service Name": "connection_info.unmapped.service_name",
             "Transport Protocol": "connection_info.protocol_name",
             "Description": "connection_info.unmapped.service_description",
+            "System Type": "connection_info.unmapped.system_type"
         }
 
         display_cols = [
@@ -126,22 +132,19 @@ class Assessor:
             "connection_info.unmapped.service_name",
             "connection_info.protocol_name",
             "connection_info.unmapped.service_description",
+            "connection_info.unmapped.system_type"
         ]
 
         mapped_ports = [
             int(p)
             for p in list(
-                set(self.known_ports_df.index).intersection(
-                    self.conn_df["id.resp_p"]
-                )
+                set(self.known_ports_df.index).intersection(self.conn_df["id.resp_p"])
             )
         ]
         unmapped_ports = [
             int(p)
             for p in list(
-                set(self.conn_df["id.resp_p"]).difference(
-                    self.known_ports_df.index
-                )
+                set(self.conn_df["id.resp_p"]).difference(self.known_ports_df.index)
             )
         ]
 
@@ -197,7 +200,7 @@ class Assessor:
         # print(f"problematic public network connections into the network: {problematic_externals}")
         # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
-            "Suspicious Connections from Internal to External Sources"
+            "Suspicious Connections from Internal Sources to External Destinations"
         ] = problematic_internals.rename(columns=display_cols_conversion)[
             display_cols
         ].sort_values(
@@ -274,9 +277,9 @@ class Assessor:
                 columns=display_cols_conversion
             )
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
-            self.analysis_dataframes[
-                "Cross Segment Communication"
-            ] = cross_segment_traffic_display.drop_duplicates()
+            self.analysis_dataframes["Cross Segment Communication"] = (
+                cross_segment_traffic_display.drop_duplicates()
+            )
 
     def check_segmented(self):
         # Going to skip anything with IPv6 for now, since it has a different subnet structure
@@ -334,12 +337,12 @@ class Assessor:
             external_contact_counts_df["total_dst"] != 0
         ]
 
-        self.analysis_dataframes[
-            "Communication to Local Hosts"
-        ] = pd.DataFrame(dsts_per_source_local_df)
-        self.analysis_dataframes[
-            "Communication to External Hosts"
-        ] = pd.DataFrame(external_contact_counts_df)
+        self.analysis_dataframes["Communication to Local Hosts"] = pd.DataFrame(
+            dsts_per_source_local_df
+        )
+        self.analysis_dataframes["Communication to External Hosts"] = pd.DataFrame(
+            external_contact_counts_df
+        )
 
     def dump_to_json(self):
         for df_k in self.analysis_dataframes.keys():
