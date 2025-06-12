@@ -348,7 +348,8 @@ class Assessor:
         for df_k in self.analysis_dataframes.keys():
             df = self.analysis_dataframes[df_k]
             df_name = df_k.replace(" ", "_")
-            df.to_json(str(Path(self.upload_output_zeek_dir, df_k + ".json", indent=4)))
+            df = df.reset_index(drop=True)
+            df.to_json(str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4)))
 
     def user_validation_approach(self):
         pass

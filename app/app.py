@@ -43,6 +43,10 @@ def upload_file():
             flash("No selected file")
             return redirect(request.url)
         if file and allowed_file(file.filename):
+            if not os.path.isdir(UPLOAD_DIR):
+                os.mkdir(UPLOAD_DIR)
+            if not os.path.isdir(ZEEK_OUTPUT_DIR):
+                os.mkdir(ZEEK_OUTPUT_DIR)
             filename = secure_filename(file.filename)
             uploaded_filepath = Path(app.config["UPLOAD_FOLDER"], filename)
             session["uploaded_filepath"] = str(uploaded_filepath)
