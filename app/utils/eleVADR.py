@@ -83,7 +83,7 @@ class Assessor:
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
         self.analysis_dataframes["Manufacturers"] = (
             matched_manufacturers_df,
-            "Description goes here."
+            "Description goes here.",
         )
 
     def zeekify(self):
@@ -122,7 +122,7 @@ class Assessor:
     def check_ports(self):
         # known_services.log filtered
 
-        description = "Description goes here."
+        description = "These are network services used in the OT network. Verify these services are intended and pay attention to the potential risks described for each service."
 
         display_cols_conversion = {
             "Port Number": "connection_info.port",
@@ -159,10 +159,8 @@ class Assessor:
             columns=display_cols_conversion
         )
         self.analysis_dataframes["Known Services"] = (
-            port_to_service_map[
-                display_cols
-            ].sort_values("connection_info.port"),
-            description
+            port_to_service_map[display_cols].sort_values("connection_info.port"),
+            description,
         )
 
     def check_external(self):
@@ -170,8 +168,8 @@ class Assessor:
         problematic_externals = []
         problematic_internals = []
 
-        description_int_to_ext = "The internal to the external connections."
-        description_ext_to_int = "The external to the internal connections."
+        description_int_to_ext = "Segmented OT systems should rarely be communicating directly with external network addresses. Verify these connections are intended."
+        description_ext_to_int = "Externally initiated connections into the network typically represent remote access paths. Verify these paths are intended."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -215,20 +213,16 @@ class Assessor:
         ] = (
             problematic_internals.rename(columns=display_cols_conversion)[
                 display_cols
-            ].sort_values(
-                ["src_endpoint.ip", "dst_endpoint.ip"]
-            ),
-            description_int_to_ext
+            ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            description_int_to_ext,
         )
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
         ] = (
             problematic_externals.rename(columns=display_cols_conversion)[
                 display_cols
-            ].sort_values(
-                ["src_endpoint.ip", "dst_endpoint.ip"]
-            ),
-            description_ext_to_int
+            ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            description_ext_to_int,
         )
 
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
@@ -265,7 +259,7 @@ class Assessor:
 
     def identify_subnets(self, cross_segment_traffic):
 
-        description = "Description goes here."
+        description = "Cross boundary communication should be carefully controlled in OT networks to enforce network segmentation. Ensure that only authorized systems are communicating with systems on your OT network."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -299,7 +293,7 @@ class Assessor:
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
                 cross_segment_traffic_display.drop_duplicates(),
-                description
+                description,
             )
 
     def check_segmented(self):
@@ -318,8 +312,8 @@ class Assessor:
 
     def identify_chatty_systems(self):
 
-        description_conn_local = "Description goes here."
-        description_conn_external = "Description goes here."
+        description_conn_local = "A large number of local connections typically indicates a server. Ensure talkative systems are servers and not adversaries enumerating the network."
+        description_conn_external = "External connection can indicate malware command and control, data exfiltration. Verify that these external connections are intended."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -363,11 +357,11 @@ class Assessor:
 
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
-            description_conn_local
+            description_conn_local,
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
-            description_conn_external
+            description_conn_external,
         )
 
     def dump_to_json(self):
