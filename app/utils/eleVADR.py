@@ -57,7 +57,7 @@ class Assessor:
 
         self.analysis_dataframes = (
             {}
-        )  # Stored as a dict with the format {"dataframe name": dataframe}
+        )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
 
     def ics_manufacturer_col(self):
         manufacturer_series = self.conn_df.apply(
@@ -81,7 +81,10 @@ class Assessor:
             }
         )[["device.ip", "device.mac", "device.vendor_name"]]
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
-        self.analysis_dataframes["Manufacturers"] = matched_manufacturers_df
+        self.analysis_dataframes["Manufacturers"] = (
+            matched_manufacturers_df,
+            "Description goes here."
+        )
 
     def zeekify(self):
         print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
@@ -119,6 +122,8 @@ class Assessor:
     def check_ports(self):
         # known_services.log filtered
 
+        description = "Description goes here."
+
         display_cols_conversion = {
             "Port Number": "connection_info.port",
             "Service Name": "connection_info.unmapped.service_name",
@@ -153,14 +158,20 @@ class Assessor:
         port_to_service_map = port_to_service_map.rename(
             columns=display_cols_conversion
         )
-        self.analysis_dataframes["Known Services"] = port_to_service_map[
-            display_cols
-        ].sort_values("connection_info.port")
+        self.analysis_dataframes["Known Services"] = (
+            port_to_service_map[
+                display_cols
+            ].sort_values("connection_info.port"),
+            description
+        )
 
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
         problematic_internals = []
+
+        description_int_to_ext = "The internal to the external connections."
+        description_ext_to_int = "The external to the internal connections."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -201,17 +212,23 @@ class Assessor:
         # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
-        ] = problematic_internals.rename(columns=display_cols_conversion)[
-            display_cols
-        ].sort_values(
-            ["src_endpoint.ip", "dst_endpoint.ip"]
+        ] = (
+            problematic_internals.rename(columns=display_cols_conversion)[
+                display_cols
+            ].sort_values(
+                ["src_endpoint.ip", "dst_endpoint.ip"]
+            ),
+            description_int_to_ext
         )
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
-        ] = problematic_externals.rename(columns=display_cols_conversion)[
-            display_cols
-        ].sort_values(
-            ["src_endpoint.ip", "dst_endpoint.ip"]
+        ] = (
+            problematic_externals.rename(columns=display_cols_conversion)[
+                display_cols
+            ].sort_values(
+                ["src_endpoint.ip", "dst_endpoint.ip"]
+            ),
+            description_ext_to_int
         )
 
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
@@ -247,6 +264,9 @@ class Assessor:
         return cidrs
 
     def identify_subnets(self, cross_segment_traffic):
+
+        description = "Description goes here."
+
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
             "id.orig_p": "src_endpoint.port",
@@ -278,7 +298,8 @@ class Assessor:
             )
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
-                cross_segment_traffic_display.drop_duplicates()
+                cross_segment_traffic_display.drop_duplicates(),
+                description
             )
 
     def check_segmented(self):
@@ -296,6 +317,9 @@ class Assessor:
             return cross_segment_traffic
 
     def identify_chatty_systems(self):
+
+        description_conn_local = "Description goes here."
+        description_conn_external = "Description goes here."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -337,16 +361,18 @@ class Assessor:
             external_contact_counts_df["total_dst"] != 0
         ]
 
-        self.analysis_dataframes["Communication to Local Hosts"] = pd.DataFrame(
-            dsts_per_source_local_df
+        self.analysis_dataframes["Communication to Local Hosts"] = (
+            pd.DataFrame(dsts_per_source_local_df),
+            description_conn_local
         )
-        self.analysis_dataframes["Communication to External Hosts"] = pd.DataFrame(
-            external_contact_counts_df
+        self.analysis_dataframes["Communication to External Hosts"] = (
+            pd.DataFrame(external_contact_counts_df),
+            description_conn_external
         )
 
     def dump_to_json(self):
         for df_k in self.analysis_dataframes.keys():
-            df = self.analysis_dataframes[df_k]
+            df = self.analysis_dataframes[df_k][0]
             df_name = df_k.replace(" ", "_")
             df = df.reset_index(drop=True)
             df.to_json(
@@ -376,10 +402,11 @@ class Assessor:
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
-                if len(self.analysis_dataframes[df_name]) > 0:
+                if len(self.analysis_dataframes[df_name][0]) > 0:
                     dataframes_as_html += (
                         f"<h2>{df_name}:</h2>"
-                        + self.analysis_dataframes[df_name].to_html(index=False)
+                        + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
+                        + self.analysis_dataframes[df_name][0].to_html(index=False)
                     )
                 else:
                     dataframes_as_html += (
