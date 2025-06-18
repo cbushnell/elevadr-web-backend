@@ -1,0 +1,589 @@
+{
+    "21": {
+        "service": "FTP",
+        "categories": [
+            "Unencrypted Protocol",
+            "File Transfer"
+        ],
+        "description": "Plain-text credentials and data; brute-force and directory-traversal exploits let adversaries exfil PLC\nprograms or drop rogue firmware.\n"
+    },
+    "22": {
+        "service": "SSH",
+        "categories": [
+            "Remote Access",
+            "Secure Protocol (if SSHv2)"
+        ],
+        "description": "Safe when hardened, but weak keys, SSHv1 fall-back, or unmanaged key sprawl enable covert tunnelling,\nlateral movement, and persistent access. \n"
+    },
+    "23": {
+        "service": "Telnet",
+        "categories": [
+            "Unencrypted Protocol",
+            "Remote Access"
+        ],
+        "description": "Zero confidentiality or integrity. Sniffing yields clear-text passwords, allowing live writes to controller CLIs.\n"
+    },
+    "25": {
+        "service": "SMTP",
+        "categories": [
+            "Messaging Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Phishing, relay abuse, and data-exfil tunnels via encoded attachments or header fields. OT alarms sent\nby PLCs reveal topology and operator emails.\n"
+    },
+    "53": {
+        "service": "DNS",
+        "categories": [
+            "Infrastructure Service",
+            "Network Discovery",
+            "Data Exfiltration"
+        ],
+        "description": "Critical but unencrypted. DNS-tunnel malware (iodine, dnscat2) slips payloads in TXT/resource records.\nCache-poisoning can reroute HMI update URLs to attacker infrastructure.\n"
+    },
+    "67-68": {
+        "service": "DHCP",
+        "categories": [
+            "Infrastructure Service",
+            "Rogue Services"
+        ],
+        "description": "Rogue DHCP servers can push malicious default gateways or DNS servers, steering Layer-3 traffic through\nattacker-controlled relays.\n"
+    },
+    "69": {
+        "service": "TFTP",
+        "categories": [
+            "Unencrypted Protocol",
+            "File Transfer"
+        ],
+        "description": "Firmware images move in clear-text and without authentication. Attackers overwrite device boot-code or\npull configs for offline recon.\n"
+    },
+    "80": {
+        "service": "HTTP",
+        "categories": [
+            "Unencrypted Protocol",
+            "Web Communication"
+        ],
+        "description": "Historian dashboards or IIoT APIs exposed over clear-text leak session cookies and allow JavaScript\ninjection that tampers with process values.\n"
+    },
+    "88": {
+        "service": "Kerberos",
+        "categories": [
+            "Authentication Service",
+            "Lateral Movement"
+        ],
+        "description": "Ticket Granting Tickets (TGTs) are gold to attackers. Pass-the-Ticket and Kerberoasting pivot attacks\ncompromise engineering-domain admin accounts.\n"
+    },
+    "110": {
+        "service": "POP3",
+        "categories": [
+            "Messaging Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Old maintenance accounts still pull backups via POP3. Clear-text credentials harvested here often unlock\nVPN or jump-host access.\n"
+    },
+    "111": {
+        "service": "RPCbind / Portmapper",
+        "categories": [
+            "Legacy Protocol",
+            "Network Discovery"
+        ],
+        "description": "Enumerates NFS/lockd services; widely exploited for recon or UDP reflection DDoS.\n"
+    },
+    "123": {
+        "service": "NTP",
+        "categories": [
+            "Infrastructure Service",
+            "Amplification/Reflection"
+        ],
+        "description": "Open NTP daemons aid DDoS and encode covert data in extension fields. Time skew disrupts alarm correlation\nand event forensics.\n"
+    },
+    "135": {
+        "service": "MS-RPC / DCOM",
+        "categories": [
+            "Legacy Protocol",
+            "Remote Access"
+        ],
+        "description": "Core to OPC Classic. EternalBlue-style exploits jump zones, inject shellcode, and create service backdoors.\n"
+    },
+    "137": {
+        "service": "NetBIOS-NS",
+        "categories": [
+            "Legacy Protocol",
+            "Unencrypted Protocol",
+            "Network Discovery"
+        ],
+        "description": "NBNS spoofing yields hostname hijack and credential capture with ease.\n"
+    },
+    "138": {
+        "service": "NetBIOS-Datagram",
+        "categories": [
+            "Legacy Protocol",
+            "Unencrypted Protocol",
+            "Network Discovery"
+        ],
+        "description": "Connection-less broadcasts leak asset inventory; datagram spoofing can DoS antiquated HMI nodes.\n"
+    },
+    "139": {
+        "service": "NetBIOS-Session",
+        "categories": [
+            "Legacy Protocol",
+            "File Sharing",
+            "Unencrypted Protocol"
+        ],
+        "description": "Grants unauthenticated share enumeration; attackers copy recipe files or drop ransomware loaders.\n"
+    },
+    "143": {
+        "service": "IMAP",
+        "categories": [
+            "Messaging Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Clear-text email retrieval\u2014the harvested creds often unlock VPN or Windows domain accounts used by OT staff.\n"
+    },
+    "161": {
+        "service": "SNMP",
+        "categories": [
+            "Unencrypted Protocol",
+            "Management & Monitoring"
+        ],
+        "description": "\u201cpublic/private\u201d communities expose switch configs, VLAN IDs, and process P&IDs. Write access flips\nnetwork-gear ACLs in seconds.\n"
+    },
+    "162": {
+        "service": "SNMP Trap",
+        "categories": [
+            "Unencrypted Protocol",
+            "Management & Monitoring"
+        ],
+        "description": "Spoofed traps suppress real alarms or trigger disruptive fail-open states in safety logic.\n"
+    },
+    "1701": {
+        "service": "L2TP",
+        "categories": [
+            "Remote Access",
+            "VPN"
+        ],
+        "description": "Frequently deployed without IPsec. Gives adversaries an easy intra-plant tunnel if pre-shared keys leak.\n"
+    },
+    "1812-1813": {},
+    "1883": {},
+    "389": {
+        "service": "LDAP",
+        "categories": [
+            "Directory Service",
+            "Unencrypted Protocol"
+        ],
+        "description": "Active Directory queries in clear-text expose usernames, group membership, and password-policy info.\nLDAP-signing & channel binding are rarely enabled in mixed-vendor OT domains.\n"
+    },
+    "443": {
+        "service": "HTTPS",
+        "categories": [
+            "Web Communication",
+            "Secure Protocol (if configured)"
+        ],
+        "description": "Safe only with valid certs, strict-TLS, and HSTS. Self-signed or expired\u2010cert devices downgrade to\nSSL 3.0 / TLS 1.0\u2014easy prey for downgrade or BEAST attacks.\n"
+    },
+    "445": {
+        "service": "SMB",
+        "categories": [
+            "File Sharing",
+            "Remote Access",
+            "Unencrypted Protocol"
+        ],
+        "description": "EternalBlue, NotPetya, Ryuk, and countless worm families pivot here. Disable SMBv1, require SMB signing,\nand isolate engineering shares.\n"
+    },
+    "464": {
+        "service": "Kerberos kpasswd",
+        "categories": [
+            "Authentication Service"
+        ],
+        "description": "Password-change channel; malicious password-spray generates noisy kpasswd traffic\u2014good IOC for brute\nforcing.\n"
+    },
+    "500": {
+        "service": "IKE / IPsec",
+        "categories": [
+            "VPN",
+            "Infrastructure Service"
+        ],
+        "description": "Weak pre-shared keys or aggressive-mode IKE v1 leak hash material; compromises site-to-site tunnels that\nbridge OT to corp IT.\n"
+    },
+    "502": {
+        "service": "Modbus-TCP",
+        "categories": [
+            "Industrial Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "No auth/encryption. Write-single-coil can start pumps, open breakers, or crash RTUs. Monitor for function\ncodes 5,6,15,16 from unexpected IPs.\n"
+    },
+    "514": {
+        "service": "Syslog (UDP)",
+        "categories": [
+            "Unencrypted Protocol",
+            "Management & Monitoring"
+        ],
+        "description": "Plain-text logs can be spoofed or suppressed; attackers erase forensic evidence by flooding with fake\n\u201cnormal-operation\u201d messages.\n"
+    },
+    "515": {
+        "service": "LPD / Print",
+        "categories": [
+            "Legacy Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Printer firmware in OT corridors is rarely patched; buffer-overflow exploits grant foothold behind firewalls.\n"
+    },
+    "587": {
+        "service": "SMTP Submission",
+        "categories": [
+            "Messaging Protocol",
+            "Secure Protocol (if STARTTLS)"
+        ],
+        "description": "STARTTLS downgrades or invalid certs revert to clear-text. Enforce TLS 1.2+ and DANE/DMARC for integrity.\n"
+    },
+    "593": {
+        "service": "RPC over HTTP / Outlook Anywhere",
+        "categories": [
+            "Remote Access",
+            "Legacy Protocol"
+        ],
+        "description": "Often overlooked in firewall rules; NTLM relaying here skips SMB signing defenses, aiding hash relay from\ncorp IT into the plant.\n"
+    },
+    "623": {
+        "service": "IPMI",
+        "categories": [
+            "Management & Monitoring",
+            "Out-of-Band Access"
+        ],
+        "description": "Default \u201cADMIN/ADMIN\u201d creds grant KVM, power-cycle, and virtual media insert. In OT, an attacker can shut\ndown safety PLCs through remote BMCs.\n"
+    },
+    "631": {
+        "service": "IPP / CUPS",
+        "categories": [
+            "Legacy Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Printer job uploads can smuggle data out or deploy malicious firmware updates into trusted OT zones.\n"
+    },
+    "636": {
+        "service": "LDAPS",
+        "categories": [
+            "Directory Service",
+            "Secure Protocol (if validated)"
+        ],
+        "description": "Secure binding fails if OT devices trust any cert\u2014man-in-the-middle with rogue LDAPs proxies harvest or\ninject group membership.\n"
+    },
+    "873": {
+        "service": "rsync",
+        "categories": [
+            "File Transfer",
+            "Unencrypted Protocol"
+        ],
+        "description": "Plain-text deltas transmit sensitive PLC source. Weak module auth enables overwrite of startup scripts on\nengineering HMI hosts.\n"
+    },
+    "902": {
+        "service": "VMware ESXi Data",
+        "categories": [
+            "Virtualization Management",
+            "Remote Access"
+        ],
+        "description": "Attackers copy full HMI VMDKs or inject rogue snapshots that auto-start C2 implants when the VM boots.\n"
+    },
+    "912": {
+        "service": "VMware Remote Console",
+        "categories": [
+            "Virtualization Management",
+            "Remote Access"
+        ],
+        "description": "Often left open to entire plant LAN; any hijack yields keyboard/mouse to SCADA VMs.\n"
+    },
+    "989-990": {
+        "service": "FTPS (Control/Data)",
+        "categories": [
+            "File Transfer",
+            "Secure Protocol (if enforced)"
+        ],
+        "description": "Misconfigured implicit vs explicit TLS causes downgrade; legacy engineering tools revert to clear-text FTP.\n"
+    },
+    "9997": {
+        "service": "Splunk Receiver"
+    },
+    "1025-1028": {
+        "service": "Windows DCOM High",
+        "categories": [
+            "Legacy Protocol",
+            "Remote Access"
+        ],
+        "description": "Dynamic RPC endpoints that slide through poorly written ACLs; many ICS malware families (Industroyer,\nLockerGoga) keep beacons here.\n"
+    },
+    "1433": {
+        "service": "MS-SQL",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "OT historians often run as \u2018sa\u2019. SQL injection or credential reuse exposes years of batch records and\nrecipe logs.\n"
+    },
+    "1434": {
+        "service": "MS-SQL Browser",
+        "categories": [
+            "Database Services",
+            "Network Discovery"
+        ],
+        "description": "UDP pings return instance names, ports, and versions\u2014ideal for automated exploit kits.\n"
+    },
+    "1521": {
+        "service": "Oracle TNS",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "Oracle DBs underpin MES/ERP links; SID brute-force plus default \u2018SCOTT/TIGER\u2019 still lands shells in older\nplants.\n"
+    },
+    "2049": {
+        "service": "NFS",
+        "categories": [
+            "File Sharing",
+            "Unencrypted Protocol"
+        ],
+        "description": "UID/GID spoofing mounts controller backups, batch files, or recipe libraries. OT often lacks Kerberos/AES\nfor secure NFSv4.\n"
+    },
+    "2375": {
+        "service": "Docker Remote API",
+        "categories": [
+            "Container / DevOps",
+            "Unencrypted Protocol"
+        ],
+        "description": "Exposes root-level container control; \u2018docker run --privileged\u2019 gives instant host escape. Seen on edge\ngateways where devs enabled remote build.\n"
+    },
+    "2376": {
+        "service": "Docker TLS API",
+        "categories": [
+            "Container / DevOps",
+            "Secure Protocol (if client certs)"
+        ],
+        "description": "Security collapses if the TLS CA is public or if daemon runs with `--tlsverify` disabled.\n"
+    },
+    "2483-2484": {
+        "service": "Oracle Secure TNS",
+        "categories": [
+            "Database Services"
+        ],
+        "description": "2483 = clear-text; 2484 = TLS. Mismatched configuration silently falls back to insecure 2483.\n"
+    },
+    "2525": {
+        "service": "Alternative SMTP",
+        "categories": [
+            "Messaging Protocol"
+        ],
+        "description": "Cloud relays default here when 25/587 blocked. Apply same SPF/DKIM/MTA-STS controls to prevent spoofing.\n"
+    },
+    "27017": {
+        "service": "MongoDB",
+        "categories": [
+            "Database Services",
+            "Unencrypted Protocol"
+        ],
+        "description": "Default \u201cbindIp 0.0.0.0\u201d + no auth: ransomware wipes historian data, then sells copies of production\nmetrics.\n"
+    },
+    "27018-27019": {
+        "service": "MongoDB Shard/Config",
+        "categories": [
+            "Database Services"
+        ],
+        "description": "Sharded clusters often exposed internally with no TLS; compromise lets attackers rewrite process data.\n"
+    },
+    "3000": {
+        "service": "Grafana",
+        "categories": [
+            "Monitoring & Visualization",
+            "Web Communication"
+        ],
+        "description": "By default no TLS and admin:admin. Compromise provides query access to OPC UA back-ends and process KPIs.\n"
+    },
+    "3306": {
+        "service": "MySQL",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "Hard-coded creds in SCADA apps still common. SQL map and MySQL-dump exfil entire historian schemas.\n"
+    },
+    "3389": {
+        "service": "RDP",
+        "categories": [
+            "Remote Access"
+        ],
+        "description": "Brute-force, BlueKeep (CVE-2019-0708), clipboard exfil, and drive-redirection all threaten integrity of\nLevel-1 & Level-2 assets.\n"
+    },
+    "4011": {
+        "service": "PXE-TFTP",
+        "categories": [
+            "Infrastructure Service",
+            "Rogue Services"
+        ],
+        "description": "Rogue PXE server pushes attacker-controlled boot images to HMI thin clients during power-up.\n"
+    },
+    "4022": {
+        "service": "MS-SQL Service Broker",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "Message queues carry batch instructions; intercepted traffic allows injection of bogus work orders.\n"
+    },
+    "4444": {
+        "service": "Netcat / Meterpreter default",
+        "categories": [
+            "C2 Channel",
+            "Lateral Movement"
+        ],
+        "description": "Unexpected listeners here are textbook post-exploitation. Block outbound 4444/4443 and monitor for new\nLISTEN sockets.\n"
+    },
+    "5000": {
+        "service": "Node-RED / REST",
+        "categories": [
+            "IoT Framework",
+            "Web Communication"
+        ],
+        "description": "Engineers prototype quick dashboards but forget to add auth; attackers trigger flow uploads that run\nshell commands on the OT gateway.\n"
+    },
+    "5022": {
+        "service": "MS-SQL Mirroring",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "Clear-text mirrors reveal live financial/production data; unauthorized mirrors siphon continuous replicas\noff-site.\n"
+    },
+    "5432": {
+        "service": "PostgreSQL",
+        "categories": [
+            "Database Services",
+            "Remote Access"
+        ],
+        "description": "Default \u2018postgres\u2019 superuser and password reuse plague open-source MES adapters; COPY TO PROGRAM lets\nattackers execute OS commands.\n"
+    },
+    "5555": {
+        "service": "Android Debug Bridge (ADB)",
+        "categories": [
+            "IoT Protocol",
+            "Remote Access"
+        ],
+        "description": "Smart-HMI tablets ship with ADB over TCP enabled; attackers install rogue APKs or capture screen video of\noperator panels.\n"
+    },
+    "5672": {
+        "service": "AMQP / RabbitMQ",
+        "categories": [
+            "Messaging Protocol",
+            "Unencrypted Protocol"
+        ],
+        "description": "Clear-text message bus feeds order IDs and set-points to PLC gateways; hijack injects falsified production\ncommands.\n"
+    },
+    "5900": {
+        "service": "VNC",
+        "categories": [
+            "Remote Access",
+            "Unencrypted Protocol"
+        ],
+        "description": "Weak DES password hash, no channel encryption. Grants full mouse/keyboard to safety PLC consoles if left\nopen.\n"
+    },
+    "5938": {
+        "service": "TeamViewer",
+        "categories": [
+            "Third-Party Remote Support",
+            "Remote Access"
+        ],
+        "description": "Cloud broker circumvents inbound firewall checks; stolen creds + \u201cEasy Access\u201d expose HMIs to the internet.\nEnforce MFA and on-demand enablement only.\n"
+    },
+    "6000": {
+        "service": "X11",
+        "categories": [
+            "Remote Access",
+            "Unencrypted Protocol"
+        ],
+        "description": "Legacy UNIX HMIs still export X sessions; keystrokes and screen data flow in clear-text\u2014an attacker can fully\nremote-control the display manager.\n"
+    },
+    "6379": {
+        "service": "Redis",
+        "categories": [
+            "Database Services",
+            "Unencrypted Protocol"
+        ],
+        "description": "No auth by default. Writing an SSH key to `/root/.ssh/authorized_keys` via Redis \u201cCONFIG SET dir \u2026\u201d gives\nroot shell on many edge gateways.\n"
+    },
+    "6667": {
+        "service": "IRC",
+        "categories": [
+            "C2 Channel",
+            "Legacy Protocol"
+        ],
+        "description": "Outbound IRC from operators\u2019 workstations is a red-flag; modern malware still uses IRC for botnet C2.\n"
+    },
+    "7070": {
+        "service": "AnyDesk",
+        "categories": [
+            "Third-Party Remote Support",
+            "Remote Access"
+        ],
+        "description": "AnyDesk tunnels outbound on 80/443 if 7070 blocked. Whitelist trusted IDs and force session recording; rogue\nAnyDesk installs give silent desktop control.\n"
+    },
+    "8080": {
+        "service": "Alternate HTTP",
+        "categories": [
+            "Unencrypted Protocol",
+            "Web Communication"
+        ],
+        "description": "Proxy & Tomcat consoles often forgotten in security scans. Attackers slip PHP web-shells or proxy C2 over\nwhitelisted 8080.\n"
+    },
+    "8081": {
+        "service": "Alternate HTTP (secure or dev)",
+        "categories": [
+            "Web Communication"
+        ],
+        "description": "Jenkins, Nexus, and other CI servers default here\u2014prime targets for supply-chain implant of PLC firmware\ntoolchains.\n"
+    },
+    "8443": {
+        "service": "Alternate HTTPS",
+        "categories": [
+            "Web Communication"
+        ],
+        "description": "Self-signed certs and deprecated ciphers still rampant; MITM strips TLS then injects malicious Java applets\ninto legacy engineering suites.\n"
+    },
+    "9000-9001": {
+        "service": "OPC UA Discovery / Splunkd alt",
+        "categories": [
+            "Industrial Protocol",
+            "Monitoring & Visualization"
+        ],
+        "description": "OPC UA Discovery on 4840 by default, but 9000/9001 appear in bespoke builds; unauthenticated browse exposes\ntag lists and node attributes useful for attack planning.\n"
+    },
+    "9200-9300": {
+        "service": "Elasticsearch REST / Cluster",
+        "categories": [
+            "Database Services",
+            "Unencrypted Protocol"
+        ],
+        "description": "OT log aggregators often leave ES open with no auth. Querying `/_cat/indices` leaks operator passwords in\nclear-text logs; cluster port 9300 enables remote-code via deserialization exploits.\n"
+    },
+    "12345": {
+        "service": "Netcat / Back-orifice common alt",
+        "categories": [
+            "C2 Channel",
+            "Lateral Movement"
+        ],
+        "description": "\u201cnc -l -p 12345 -e /bin/sh\u201d is still copy-pasted by red-teamers. Block and monitor for outbound 12345/udp\npayloads in DPI engines.\n"
+    },
+    "49152-65535": {
+        "service": "Windows Ephemeral RPC",
+        "categories": [
+            "Legacy Protocol",
+            "Remote Access"
+        ],
+        "description": "DCOM/SMB dynamic-ports bypass static ACLs if \u201cAllow all high ports\u201d is configured. Segment and firewall\nthese ranges to stop lateral movement.\n"
+    },
+    "null": {
+        "service": "Generic Multicast / Broadcast (mDNS, SSDP, EIGRP, IGMP floods)",
+        "categories": [
+            "Multicast",
+            "Anomalous Traffic Detection"
+        ],
+        "description": "Excess multicast saturates deterministic control loops and hides discovery scans. Filter 224.0.0.0/4,\ndisable unused L2 protocols (CDP, LLDP), and rate-limit IGMP.\n"
+    }
+}

@@ -1,6 +1,7 @@
 import ipaddress
 import json
 import yaml
+import pandas as pd
 
 
 def convert_ips(ip):
@@ -40,3 +41,9 @@ def load_consts(consts_path):
     with open(consts_path) as f:
         data = yaml.load(f, yaml.Loader)
         return data["ICS_manufacturer_search_words"]
+
+def port_risk(row, port_risk):
+    """Matches ports in the Known Services table with information in the port_risk document"""
+    values = port_risk.get(str(row['connection_info.port']), "NaN")
+    print(values)
+    return pd.Series(values)
