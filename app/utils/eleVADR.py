@@ -124,7 +124,7 @@ class Assessor:
             "Service Name": "connection_info.unmapped.service_name",
             "Transport Protocol": "connection_info.protocol_name",
             "Description": "connection_info.unmapped.service_description",
-            "System Type": "connection_info.unmapped.system_type"
+            "System Type": "connection_info.unmapped.system_type",
         }
 
         display_cols = [
@@ -132,7 +132,7 @@ class Assessor:
             "connection_info.unmapped.service_name",
             "connection_info.protocol_name",
             "connection_info.unmapped.service_description",
-            "connection_info.unmapped.system_type"
+            "connection_info.unmapped.system_type",
         ]
 
         mapped_ports = [
@@ -320,13 +320,13 @@ class Assessor:
             dsts_per_source_local.to_frame()
             .reset_index()
             .rename(columns=display_cols_conversion)
-            .sort_values("total_dst")
+            .sort_values(by="total_dst", ascending=False)
         )
         external_contact_counts_df = (
             external_contact_counts.to_frame()
             .reset_index()
             .rename(columns=display_cols_conversion)
-            .sort_values("total_dst")
+            .sort_values(by="total_dst", ascending=False)
         )
 
         # Drop hosts with no listed communications
@@ -349,7 +349,9 @@ class Assessor:
             df = self.analysis_dataframes[df_k]
             df_name = df_k.replace(" ", "_")
             df = df.reset_index(drop=True)
-            df.to_json(str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4)))
+            df.to_json(
+                str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
+            )
 
     def user_validation_approach(self):
         pass
