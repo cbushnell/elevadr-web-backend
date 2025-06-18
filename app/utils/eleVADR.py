@@ -122,6 +122,8 @@ class Assessor:
     def check_ports(self):
         # known_services.log filtered
 
+        description = "Description goes here."
+
         display_cols_conversion = {
             "Port Number": "connection_info.port",
             "Service Name": "connection_info.unmapped.service_name",
@@ -160,13 +162,16 @@ class Assessor:
             port_to_service_map[
                 display_cols
             ].sort_values("connection_info.port"),
-            "Description goes here."
+            description
         )
 
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
         problematic_externals = []
         problematic_internals = []
+
+        description_int_to_ext = "The internal to the external connections."
+        description_ext_to_int = "The external to the internal connections."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -213,7 +218,7 @@ class Assessor:
             ].sort_values(
                 ["src_endpoint.ip", "dst_endpoint.ip"]
             ),
-            "Description goes here."
+            description_int_to_ext
         )
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
@@ -223,7 +228,7 @@ class Assessor:
             ].sort_values(
                 ["src_endpoint.ip", "dst_endpoint.ip"]
             ),
-            "Description goes here."
+            description_ext_to_int
         )
 
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
@@ -259,6 +264,9 @@ class Assessor:
         return cidrs
 
     def identify_subnets(self, cross_segment_traffic):
+
+        description = "Description goes here."
+
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
             "id.orig_p": "src_endpoint.port",
@@ -291,7 +299,7 @@ class Assessor:
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
                 cross_segment_traffic_display.drop_duplicates(),
-                "Description goes here."
+                description
             )
 
     def check_segmented(self):
@@ -309,6 +317,9 @@ class Assessor:
             return cross_segment_traffic
 
     def identify_chatty_systems(self):
+
+        description_conn_local = "Description goes here."
+        description_conn_external = "Description goes here."
 
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
@@ -352,11 +363,11 @@ class Assessor:
 
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
-            "Description goes here."
+            description_conn_local
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
-            "Description goes here."
+            description_conn_external
         )
 
     def dump_to_json(self):
@@ -389,11 +400,11 @@ class Assessor:
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
-                if len(self.analysis_dataframes[df_name]) > 0:
+                if len(self.analysis_dataframes[df_name][0]) > 0:
                     dataframes_as_html += (
                         f"<h2>{df_name}:</h2>"
-                        + self.analysis_dataframes[df_name][0].to_html(index=False)
                         + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
+                        + self.analysis_dataframes[df_name][0].to_html(index=False)
                     )
                 else:
                     dataframes_as_html += (
