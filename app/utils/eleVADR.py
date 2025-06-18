@@ -35,9 +35,8 @@ class Assessor:
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
-        self.zeekify()
+        # self.zeekify()
         log_to_df = LogToDataFrame()
-
         self.conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
@@ -206,8 +205,6 @@ class Assessor:
         problematic_externals = self.conn_df[
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
         ]
-        # print(f"problematic public network connections into the network: {problematic_externals}")
-        # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
         ] = (
@@ -224,8 +221,6 @@ class Assessor:
             ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_ext_to_int,
         )
-
-        # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
 
     def identify_local_vlans(self):
         locals_conn_indices = self.conn_df[
@@ -296,6 +291,13 @@ class Assessor:
                 description,
             )
 
+    def transform_display(self, display_df):
+        pd.DataFrame(
+            display_df.groupby(by=["src_endpoint.ip", "dst_endpoint.port"])[
+                "dst_endpoint.ip"
+            ]
+        )
+
     def check_segmented(self):
         # Going to skip anything with IPv6 for now, since it has a different subnet structure
         if "6" not in self.conn_df["connection_info.protocol_ver"].unique():
@@ -306,8 +308,12 @@ class Assessor:
                 (self.conn_df["/24"] != self.conn_df["/24_resp"])
                 & (self.conn_df["local_orig"] == "T")
                 & (self.conn_df["local_resp"] == "T")
+                & (
+                    self.conn_df["id.resp_h"] != "255.255.255.255"
+                )  # cut out broadcast being included
             ]
             self.identify_subnets(cross_segment_traffic)
+
             return cross_segment_traffic
 
     def identify_chatty_systems(self):
@@ -412,9 +418,14 @@ class Assessor:
 
 if __name__ == "__main__":
 
-    a = Assessor("data/Module_7_IR_Lab_1.pcap", "zeeks", "zeek_scripts", "data")
-    a.identify_chatty_systems()
-    # a.check_segmented()
+    a = Assessor(
+        "data/Module_7_IR_Lab_1.pcap",
+        "app/zeeks",
+        "zeek_scripts",
+        "app/data/assessor_data",
+    )
+    # a.identify_chatty_systems()
+    a.check_segmented()
     # a.identify_local_vlans()
     # a.check_external()
     # a.ics_manufacturer_col()
