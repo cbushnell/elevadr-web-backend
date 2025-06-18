@@ -57,7 +57,7 @@ class Assessor:
 
         self.analysis_dataframes = (
             {}
-        )  # Stored as a dict with the format {"dataframe name": dataframe}
+        )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
 
     def ics_manufacturer_col(self):
         manufacturer_series = self.conn_df.apply(
@@ -81,7 +81,10 @@ class Assessor:
             }
         )[["device.ip", "device.mac", "device.vendor_name"]]
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
-        self.analysis_dataframes["Manufacturers"] = matched_manufacturers_df
+        self.analysis_dataframes["Manufacturers"] = (
+            matched_manufacturers_df,
+            "Description goes here."
+        )
 
     def zeekify(self):
         print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
@@ -153,9 +156,12 @@ class Assessor:
         port_to_service_map = port_to_service_map.rename(
             columns=display_cols_conversion
         )
-        self.analysis_dataframes["Known Services"] = port_to_service_map[
-            display_cols
-        ].sort_values("connection_info.port")
+        self.analysis_dataframes["Known Services"] = (
+            port_to_service_map[
+                display_cols
+            ].sort_values("connection_info.port"),
+            "Description goes here."
+        )
 
     def check_external(self):
         # did the message start from a private IP and go to a local_ip with the response.
@@ -201,17 +207,23 @@ class Assessor:
         # print(f"problematic connections to public networks from the local network: {problematic_internals}")
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
-        ] = problematic_internals.rename(columns=display_cols_conversion)[
-            display_cols
-        ].sort_values(
-            ["src_endpoint.ip", "dst_endpoint.ip"]
+        ] = (
+            problematic_internals.rename(columns=display_cols_conversion)[
+                display_cols
+            ].sort_values(
+                ["src_endpoint.ip", "dst_endpoint.ip"]
+            ),
+            "Description goes here."
         )
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
-        ] = problematic_externals.rename(columns=display_cols_conversion)[
-            display_cols
-        ].sort_values(
-            ["src_endpoint.ip", "dst_endpoint.ip"]
+        ] = (
+            problematic_externals.rename(columns=display_cols_conversion)[
+                display_cols
+            ].sort_values(
+                ["src_endpoint.ip", "dst_endpoint.ip"]
+            ),
+            "Description goes here."
         )
 
         # Known outbound external connections https://github.com/esnet-security/zeek-outbound-known-services-with-origflag
@@ -278,7 +290,8 @@ class Assessor:
             )
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
-                cross_segment_traffic_display.drop_duplicates()
+                cross_segment_traffic_display.drop_duplicates(),
+                "Description goes here."
             )
 
     def check_segmented(self):
@@ -337,16 +350,18 @@ class Assessor:
             external_contact_counts_df["total_dst"] != 0
         ]
 
-        self.analysis_dataframes["Communication to Local Hosts"] = pd.DataFrame(
-            dsts_per_source_local_df
+        self.analysis_dataframes["Communication to Local Hosts"] = (
+            pd.DataFrame(dsts_per_source_local_df),
+            "Description goes here."
         )
-        self.analysis_dataframes["Communication to External Hosts"] = pd.DataFrame(
-            external_contact_counts_df
+        self.analysis_dataframes["Communication to External Hosts"] = (
+            pd.DataFrame(external_contact_counts_df),
+            "Description goes here."
         )
 
     def dump_to_json(self):
         for df_k in self.analysis_dataframes.keys():
-            df = self.analysis_dataframes[df_k]
+            df = self.analysis_dataframes[df_k][0]
             df_name = df_k.replace(" ", "_")
             df = df.reset_index(drop=True)
             df.to_json(str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4)))
@@ -377,7 +392,8 @@ class Assessor:
                 if len(self.analysis_dataframes[df_name]) > 0:
                     dataframes_as_html += (
                         f"<h2>{df_name}:</h2>"
-                        + self.analysis_dataframes[df_name].to_html(index=False)
+                        + self.analysis_dataframes[df_name][0].to_html(index=False)
+                        + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
                     )
                 else:
                     dataframes_as_html += (
