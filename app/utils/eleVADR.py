@@ -13,6 +13,7 @@ from app.utils.utils import (
     get_list_of_manufacturers,
     load_consts,
     check_ip_version,
+    port_risk,
 )
 
 
@@ -54,6 +55,10 @@ class Assessor:
         )
         self.known_ports_df.index.name = "Port Number"
 
+        self.port_risk = None
+        with open(str(Path(self.path_to_assessor_data + "/port_risk.json")), "r") as f:
+            self.port_risk = json.load(f)
+
         self.analysis_dataframes = (
             {}
         )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
@@ -82,6 +87,7 @@ class Assessor:
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
         self.analysis_dataframes["Manufacturers"] = (
             matched_manufacturers_df,
+            "Description goes here.",
             "Description goes here.",
         )
 
@@ -118,6 +124,9 @@ class Assessor:
             ]
         )
 
+    def port_risk_assessment(self, known_services_df):
+        pass
+
     def check_ports(self):
         # known_services.log filtered
 
@@ -136,6 +145,7 @@ class Assessor:
             "connection_info.unmapped.service_name",
             "connection_info.protocol_name",
             "connection_info.unmapped.service_description",
+            "connection_info.unmapped.system_type",
             "connection_info.unmapped.system_type",
         ]
 
@@ -157,8 +167,30 @@ class Assessor:
         port_to_service_map = port_to_service_map.rename(
             columns=display_cols_conversion
         )
+
+        # All matched services, regardless of risk
+        known_services_df = port_to_service_map[display_cols].sort_values(
+            "connection_info.port"
+        )
+
+        # Match known risky ports
+        print(self.port_risk)
+        risk_service_match_df = known_services_df.apply(
+            lambda row: port_risk(row, self.port_risk), axis=1
+        )
+        print(risk_service_match_df)
+
+        known_risky_services_df = pd.DataFrame({})
+        risk_service_match_df = risk_service_match_df[["description", "categories"]]
+        known_risky_services_df = pd.concat(
+            [known_services_df, risk_service_match_df], axis=1
+        )
+        known_risky_services_df = known_risky_services_df.rename(
+            columns={"description": "Description", "categories": "Categories"}
+        ).dropna()  # Move this to the display columns list later
+
         self.analysis_dataframes["Known Services"] = (
-            port_to_service_map[display_cols].sort_values("connection_info.port"),
+            known_risky_services_df,
             description,
         )
 
@@ -212,6 +244,8 @@ class Assessor:
                 display_cols
             ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_int_to_ext,
+            # ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            # description_int_to_ext,
         )
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
@@ -220,6 +254,8 @@ class Assessor:
                 display_cols
             ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_ext_to_int,
+            # ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            # description_ext_to_int,
         )
 
     def identify_local_vlans(self):
@@ -288,6 +324,7 @@ class Assessor:
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
                 cross_segment_traffic_display.drop_duplicates(),
+                description,
                 description,
             )
 
@@ -364,9 +401,11 @@ class Assessor:
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
             description_conn_local,
+            description_conn_local,
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
+            description_conn_external,
             description_conn_external,
         )
 
@@ -375,6 +414,9 @@ class Assessor:
             df = self.analysis_dataframes[df_k][0]
             df_name = df_k.replace(" ", "_")
             df = df.reset_index(drop=True)
+            df.to_json(
+                str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
+            )
             df.to_json(
                 str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
             )
@@ -391,12 +433,12 @@ class Assessor:
         pass
 
     def run_analysis(self):
-        self.ics_manufacturer_col()
+        self.ics_manufacturer_col() 
         self.check_ports()
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
-        self.dump_to_json()
+        # self.dump_to_json()
 
     def generate_report(self):
         if self.analysis_dataframes != {}:
