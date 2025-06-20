@@ -36,7 +36,7 @@ class Assessor:
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
-        # self.zeekify()
+        self.zeekify()
         log_to_df = LogToDataFrame()
         self.conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
@@ -84,12 +84,15 @@ class Assessor:
                 "ICS_manufacturer": "device.vendor_name",
             }
         )[["device.ip", "device.mac", "device.vendor_name"]]
+
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
         self.analysis_dataframes["Manufacturers"] = (
             matched_manufacturers_df,
             "Description goes here.",
             "Description goes here.",
         )
+        # Tracking ICS manufacturers to tie into other analysis
+        self.matched_manufacturers_df = matched_manufacturers_df
 
     def zeekify(self):
         print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
@@ -172,7 +175,7 @@ class Assessor:
         known_services_df = port_to_service_map[display_cols].sort_values(
             "connection_info.port"
         )
-
+        # self.ics_known_services = known_services_df[""]
         # Match known risky ports
         print(self.port_risk)
         risk_service_match_df = known_services_df.apply(
@@ -188,7 +191,7 @@ class Assessor:
         known_risky_services_df = known_risky_services_df.rename(
             columns={"description": "Description", "categories": "Categories"}
         ).dropna()  # Move this to the display columns list later
-
+        print(known_risky_services_df)
         self.analysis_dataframes["Known Services"] = (
             known_risky_services_df,
             description,
@@ -328,6 +331,48 @@ class Assessor:
                 description,
             )
 
+    def merge_with_ICS(self, right_merge):
+        # Known OT Manufacturer + Cross Segment - select src_endpoint.ip, src_endpoint.port, service_name, where device.vendor_name and device.ip == src_endpoint.ip or device.ip == dst_endpoint.ip
+        src_cross_segment_OT = pd.merge(
+            self.matched_manufacturers_df,
+            right_merge,
+            left_on=["device.ip"],
+            right_on=["src_endpoint.ip"],
+            # self.analysis_dataframes["Cross Segment Communication"][0], left_on=["device.ip"], right_on=["src_endpoint.ip"]
+        )
+        # OT Systems being communicated to cross segment
+        dst_cross_segment_OT = pd.merge(
+            self.matched_manufacturers_df,
+            right_merge,
+            left_on=["device.ip"],
+            right_on=["dst_endpoint.ip"],
+        )
+        cross_segment_OT_systems = pd.concat(
+            [src_cross_segment_OT, dst_cross_segment_OT], axis=0
+        )
+        self.analysis_dataframes["OT Systems Communicating Across Segments"] = (
+            cross_segment_OT_systems
+        )
+        #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
+        # src_cross_segment_with_OT_ports = pd.merge(
+        #     ToDo - known_ics_services,
+        #     right_merge,
+        #     left_on=["Port Number"], ToDo -
+        #     right_on=["src_endpoint.port"],
+        # )
+
+        #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
+        # dst_cross_segment_with_OT_ports = pd.merge(
+        #     ToDo - known_ics_services,
+        #     right_merge,
+        #     left_on=["Port Number"], ToDo -
+        #     right_on=["dst_endpoint.port"],
+        # )
+        # cross_segment_OT_services = pd.concat(
+        #     [src_cross_segment_with_OT_ports, dst_cross_segment_with_OT_ports], axis=0
+        # )
+        # self.analysis_dataframes["Systems Utilizing ICS Services Communicating Across Segments"] = cross_segment_OT_services
+
     def transform_display(self, display_df):
         pd.DataFrame(
             display_df.groupby(by=["src_endpoint.ip", "dst_endpoint.port"])[
@@ -350,7 +395,6 @@ class Assessor:
                 )  # cut out broadcast being included
             ]
             self.identify_subnets(cross_segment_traffic)
-
             return cross_segment_traffic
 
     def identify_chatty_systems(self):
@@ -433,7 +477,7 @@ class Assessor:
         pass
 
     def run_analysis(self):
-        self.ics_manufacturer_col() 
+        self.ics_manufacturer_col()
         self.check_ports()
         self.check_external()
         self.check_segmented()
@@ -466,11 +510,14 @@ if __name__ == "__main__":
         "zeek_scripts",
         "app/data/assessor_data",
     )
+    a.check_ports()
     # a.identify_chatty_systems()
-    a.check_segmented()
+    # a.ics_manufacturer_col()
+    # a.check_segmented()
+    # a.check_ICS_and_cross_segment()
     # a.identify_local_vlans()
     # a.check_external()
-    # a.ics_manufacturer_col()
+
     # print(a.conn_df)
     # print(a.known_services_df)
     # a.run_analysis()

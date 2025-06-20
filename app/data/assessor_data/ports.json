@@ -44384,7 +44384,7 @@
         "Transport Protocol":"sctp, tcp, udp",
         "Description":"DNP, Distributed Network Protocol",
         "Source":"IANA",
-        "System Type":"IT"
+        "System Type":"OT"
     },
     "20001":{
         "Service Name":"microsan",
