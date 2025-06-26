@@ -231,15 +231,18 @@ class Assessor:
             "traffic.bytes_in",
         ]
 
-        conn_data = self.conn_df[["local_orig", "local_resp"]].groupby(
-            ["local_orig", "local_resp"], observed=True
-        )
+        # conn_data = self.conn_df[["local_orig", "local_resp"]].groupby(
+        #     ["local_orig", "local_resp"], observed=True
+        # )
         problematic_internals = self.conn_df[
-            (self.conn_df["local_orig"] == "T") & (self.conn_df["local_resp"] == "F")
+            (self.conn_df["local_orig"] == "T")
+            & (self.conn_df["local_resp"] == "F")
+            & (~self.conn_df["id.resp_h"].str.contains("ff02"))
         ]
         problematic_externals = self.conn_df[
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
         ]
+
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
         ] = (
@@ -393,6 +396,9 @@ class Assessor:
                 & (
                     self.conn_df["id.resp_h"] != "255.255.255.255"
                 )  # cut out broadcast being included
+                & (
+                    ~self.conn_df["id.resp_h"].str.contains("ff02")
+                )  # Cut out link-local IPv6 multicast
             ]
             self.identify_subnets(cross_segment_traffic)
             return cross_segment_traffic
