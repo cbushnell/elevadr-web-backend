@@ -237,7 +237,9 @@ class Assessor:
         problematic_internals = self.conn_df[
             (self.conn_df["local_orig"] == "T")
             & (self.conn_df["local_resp"] == "F")
-            & (~self.conn_df["id.resp_h"].str.contains("ff02"))
+            & (
+                ~self.conn_df["id.resp_h"].str.contains("ff02")
+            )  # Filter out IPv6 link-local multicast (see https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml)
         ]
         problematic_externals = self.conn_df[
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
