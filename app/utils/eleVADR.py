@@ -18,6 +18,7 @@ from app.utils.utils import (
 
 
 class Assessor:
+    """Conduct analysis on pcap using Zeek with supplementary analysis using pandas"""
 
     def __init__(
         self,
@@ -26,6 +27,7 @@ class Assessor:
         path_to_zeek_scripts=None,
         path_to_assessor_data=None,
     ):
+        """Execute Zeek processing, convert to pandas dataframes, establish analysis dataframe dict for analysis result dataframes"""
         self.path_to_pcap = path_to_pcap
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
@@ -33,15 +35,21 @@ class Assessor:
         self.ics_manufacturers = load_consts(
             str(Path(self.path_to_assessor_data, "CONST.yml"))
         )
+
         self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
+
+        # Define the output directory for Zeek logs and report jsons - based on the pcap filename (ex. app/data/zeeks/<pcap_filename>/)
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
+        # Process pcap with Zeek
         self.zeekify()
+
+        # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
         self.conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
-        # todo: eventually only convert the unique values to optimize
+        # TODO: eventually only convert the unique values to optimize
         self.conn_df["connection_info.protocol_ver"] = self.conn_df["id.orig_h"].apply(
             check_ip_version
         )
@@ -55,15 +63,23 @@ class Assessor:
         )
         self.known_ports_df.index.name = "Port Number"
 
+        # Load information about services with demonstrated risks from "port_risk.json"
         self.port_risk = None
         with open(str(Path(self.path_to_assessor_data + "/port_risk.json")), "r") as f:
             self.port_risk = json.load(f)
 
+        # Define the structure to hold report results
         self.analysis_dataframes = (
             {}
         )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
 
     def ics_manufacturer_col(self):
+        """Identify host device manufacturers by comparing MAC addresses in pcap to Organizationally Unique Identifiers (OUIs)"""
+
+        # Description of the results and how they should be interpreted
+        description = "Inventory of device manufacturers."
+
+        # Load OUI information
         manufacturer_series = self.conn_df.apply(
             lambda row: get_list_of_manufacturers(
                 str(Path(self.path_to_assessor_data, "latest_oui_lookup.json")),
@@ -73,6 +89,7 @@ class Assessor:
             axis=1,
         )
         self.conn_df["ICS_manufacturer"] = manufacturer_series
+
         # Get rows where ICS Manufacturer is identified as source
         matched_manufacturers_df = self.conn_df[
             ~self.conn_df["ICS_manufacturer"].isnull()
@@ -84,22 +101,25 @@ class Assessor:
                 "ICS_manufacturer": "device.vendor_name",
             }
         )[["device.ip", "device.mac", "device.vendor_name"]]
-
         matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
+
+        # Submit completed analysis to the collection of reports
         self.analysis_dataframes["Manufacturers"] = (
             matched_manufacturers_df,
-            "Description goes here.",
-            "Description goes here.",
+            description,
         )
+
         # Tracking ICS manufacturers to tie into other analysis
         self.matched_manufacturers_df = matched_manufacturers_df
 
     def zeekify(self):
-        print(self.path_to_pcap, self.path_to_zeek, self.path_to_zeek_scripts)
-        # Make a new subdirectory for the pcap analysis based on pcap name
+        """Execute pcap analysis using Zeek"""
 
+        # Make a new subdirectory for the pcap analysis based on pcap name
         if not os.path.isdir(self.upload_output_zeek_dir):
             os.mkdir(self.upload_output_zeek_dir)
+
+        # Run default Zeek processing
         subprocess.check_output(
             [
                 "zeek",
@@ -108,6 +128,8 @@ class Assessor:
                 f"Log::default_logdir={self.upload_output_zeek_dir}",
             ]
         )
+
+        # Run "known_services" Zeek script
         subprocess.check_output(
             [
                 "zeek",
@@ -117,6 +139,8 @@ class Assessor:
                 f"Log::default_logdir={self.upload_output_zeek_dir}",
             ]
         )
+
+        # Run "mac_logging" Zeek script
         subprocess.check_output(
             [
                 "zeek",
@@ -127,14 +151,13 @@ class Assessor:
             ]
         )
 
-    def port_risk_assessment(self, known_services_df):
-        pass
-
     def check_ports(self):
-        # known_services.log filtered
+        """Use the destination ports of traffic from conn.log to determine which services are present in the environment. Combine results with "risky_ports" to describe risks of using a given service"""
 
+        # Description of the results and how they should be interpreted
         description = "These are network services used in the OT network. Verify these services are intended and pay attention to the potential risks described for each service."
 
+        # Mappings from base field/column names to the desired names of the columns for the report
         display_cols_conversion = {
             "Port Number": "connection_info.port",
             "Service Name": "connection_info.unmapped.service_name",
@@ -143,6 +166,7 @@ class Assessor:
             "System Type": "connection_info.unmapped.system_type",
         }
 
+        # The columns to be recorded in the report
         display_cols = [
             "connection_info.port",
             "connection_info.unmapped.service_name",
@@ -152,12 +176,15 @@ class Assessor:
             "connection_info.unmapped.system_type",
         ]
 
+        # Set of ports with assigned services through IANA
         mapped_ports = [
             int(p)
             for p in list(
                 set(self.known_ports_df.index).intersection(self.conn_df["id.resp_p"])
             )
         ]
+
+        # Set of unreserved ports - currently unused
         unmapped_ports = [
             int(p)
             for p in list(
@@ -165,7 +192,10 @@ class Assessor:
             )
         ]
 
+        # Mapping the ports to their assigned service
         port_to_service_map = self.known_ports_df.loc[mapped_ports, :]
+
+        # Applying field conversions
         port_to_service_map["Port Number"] = self.known_ports_df.loc[mapped_ports].index
         port_to_service_map = port_to_service_map.rename(
             columns=display_cols_conversion
@@ -175,14 +205,13 @@ class Assessor:
         known_services_df = port_to_service_map[display_cols].sort_values(
             "connection_info.port"
         )
-        # self.ics_known_services = known_services_df[""]
+
         # Match known risky ports
-        print(self.port_risk)
         risk_service_match_df = known_services_df.apply(
             lambda row: port_risk(row, self.port_risk), axis=1
         )
-        print(risk_service_match_df)
 
+        # Adding risky port descriptions and risk categories to the report
         known_risky_services_df = pd.DataFrame({})
         risk_service_match_df = risk_service_match_df[["description", "categories"]]
         known_risky_services_df = pd.concat(
@@ -191,20 +220,23 @@ class Assessor:
         known_risky_services_df = known_risky_services_df.rename(
             columns={"description": "Description", "categories": "Categories"}
         ).dropna()  # Move this to the display columns list later
-        print(known_risky_services_df)
+
+        # Assign dataframe to the collection of final reports
         self.analysis_dataframes["Known Services"] = (
             known_risky_services_df,
             description,
         )
 
     def check_external(self):
-        # did the message start from a private IP and go to a local_ip with the response.
+        """Analyze connections from internal devices to external addresses and from external addresses to internal devices."""
         problematic_externals = []
         problematic_internals = []
 
+        # Description of the results and how they should be interpreted
         description_int_to_ext = "Segmented OT systems should rarely be communicating directly with external network addresses. Verify these connections are intended."
         description_ext_to_int = "Externally initiated connections into the network typically represent remote access paths. Verify these paths are intended."
 
+        # Mappings from base field/column names to the desired names of the columns for the report
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
             "id.orig_p": "src_endpoint.port",
@@ -218,6 +250,7 @@ class Assessor:
             "resp_ip_bytes": "traffic.bytes_in",
         }
 
+        # The columns to be recorded in the report
         display_cols = [
             "src_endpoint.ip",
             "src_endpoint.port",
@@ -231,9 +264,7 @@ class Assessor:
             "traffic.bytes_in",
         ]
 
-        # conn_data = self.conn_df[["local_orig", "local_resp"]].groupby(
-        #     ["local_orig", "local_resp"], observed=True
-        # )
+        # Connections from internal to external addresses
         problematic_internals = self.conn_df[
             (self.conn_df["local_orig"] == "T")
             & (self.conn_df["local_resp"] == "F")
@@ -241,10 +272,13 @@ class Assessor:
                 ~self.conn_df["id.resp_h"].str.contains("ff02")
             )  # Filter out IPv6 link-local multicast (see https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml)
         ]
+
+        # Connections from external to internal addresses
         problematic_externals = self.conn_df[
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
         ]
 
+        # Assign dataframe to the collection of final reports and apply field conversions
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
         ] = (
@@ -252,9 +286,9 @@ class Assessor:
                 display_cols
             ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_int_to_ext,
-            # ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
-            # description_int_to_ext,
         )
+
+        # Assign dataframe to the collection of final reports and apply field conversions
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
         ] = (
@@ -262,20 +296,32 @@ class Assessor:
                 display_cols
             ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_ext_to_int,
-            # ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
-            # description_ext_to_int,
         )
 
     def identify_local_vlans(self):
+        """Identify the /24 subnet membership for origin and destination hosts. Create new columns for each connection in the conn dataframe to record their associated subnet.
+        
+        Returns:
+            cidrs: List of local subnets present in the traffic
+        """
+
+        # Select only local to local communications
         locals_conn_indices = self.conn_df[
             (self.conn_df["local_orig"] == "T") & (self.conn_df["local_resp"] == "T")
         ].index
+
+        # Convert string IPs to ipaddress objects
         self.conn_df["/24"] = self.conn_df["id.orig_h"].apply(convert_ips)
         self.conn_df["/24_resp"] = self.conn_df["id.resp_h"].apply(convert_ips)
+
+        # Shift 8 bits to determine the /24 subnet
         self.conn_df["/24"] = self.conn_df["/24"].apply(lambda x: int(x >> 8))
         self.conn_df["/24_resp"] = self.conn_df["/24_resp"].apply(lambda x: int(x >> 8))
+
+        # Collect the set of subnets
         cidrs = pd.Series(self.conn_df.groupby(["/24"]).count().index)
 
+        # Create new columns in the conn dataframe for each of the connections to record origin and destination subnets
         self.conn_df["/24"] = (
             self.conn_df["/24"]
             .apply(lambda x: int(x << 8))
@@ -288,18 +334,28 @@ class Assessor:
             .apply(convert_ip_to_str)
             .astype("str")
         )
+
+        # Set non-local communications' subnet address values to NaN
         not_included_indices = list(
             set(self.conn_df.index).difference(locals_conn_indices)
         )
         self.conn_df.loc[not_included_indices, "/24"] = "NaN"
         self.conn_df.loc[not_included_indices, "/24_resp"] = "NaN"
 
+        # Return the set of subnets
         return cidrs
 
     def identify_subnets(self, cross_segment_traffic):
+        """Create report for connections that may be communicating across subnets.
+        
+        Parameters:
+            cross_segment_traffic: Dataframe containing conn_df cross-segment records 
+        """
 
+        # Description of the results and how they should be interpreted
         description = "Cross boundary communication should be carefully controlled in OT networks to enforce network segmentation. Ensure that only authorized systems are communicating with systems on your OT network."
 
+        # Mappings from base field/column names to the desired names of the columns for the report
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
             "id.orig_p": "src_endpoint.port",
@@ -311,6 +367,7 @@ class Assessor:
             "/24_resp": "connection_info.unmapped.dst_subnet",
         }
 
+        # The columns to be recorded in the report
         display_cols = [
             "src_endpoint.ip",
             "src_endpoint.port",
@@ -322,17 +379,18 @@ class Assessor:
             "connection_info.unmapped.dst_subnet",
         ]
 
-        # Given output of check_segmented, identify where our guess at networks might be wrong
-        # placeholder logic for if too much cross traffic is occuring
+        # TODO: Given output of check_segmented, identify where our guess at networks might be wrong
+
+        # Only submit the report if there is evidence of cross-segment communication
         if len(cross_segment_traffic) > 0:
-            # todo: Change return value to be more useful (aggregate of addresses? particularly sus ones?)
+            # TODO: Change return value to be more useful (aggregate of addresses? particularly sus ones?)
+            # Apply field conversions and add to the collection of reports
             cross_segment_traffic = cross_segment_traffic.rename(
                 columns=display_cols_conversion
             )
             cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
                 cross_segment_traffic_display.drop_duplicates(),
-                description,
                 description,
             )
 
@@ -358,6 +416,7 @@ class Assessor:
         self.analysis_dataframes["OT Systems Communicating Across Segments"] = (
             cross_segment_OT_systems
         )
+
         #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
         # src_cross_segment_with_OT_ports = pd.merge(
         #     ToDo - known_ics_services,
@@ -378,19 +437,19 @@ class Assessor:
         # )
         # self.analysis_dataframes["Systems Utilizing ICS Services Communicating Across Segments"] = cross_segment_OT_services
 
-    def transform_display(self, display_df):
-        pd.DataFrame(
-            display_df.groupby(by=["src_endpoint.ip", "dst_endpoint.port"])[
-                "dst_endpoint.ip"
-            ]
-        )
-
     def check_segmented(self):
+        """Collect connections assumed to be communicating cross-segment, while filtering out broadcast addresses.
+        
+        Returns:
+            cross_segment_traffic: Dataframe containing conn_df cross-segment records 
+        """
         # Going to skip anything with IPv6 for now, since it has a different subnet structure
         if "6" not in self.conn_df["connection_info.protocol_ver"].unique():
+            
             # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
             self.identify_local_vlans()
-            # todo-get this list filtered to local_orig
+
+            # TODO: get this list filtered to local_orig
             cross_segment_traffic = self.conn_df[
                 (self.conn_df["/24"] != self.conn_df["/24_resp"])
                 & (self.conn_df["local_orig"] == "T")
@@ -399,24 +458,29 @@ class Assessor:
                     self.conn_df["id.resp_h"] != "255.255.255.255"
                 )  # cut out broadcast being included
                 & (
-                    ~self.conn_df["id.resp_h"].str.contains("ff02")
-                )  # Cut out link-local IPv6 multicast
+                    self.conn_df["id.resp_h"] != "239.255.255.250"
+                )  # Cut out SSDP multicast
             ]
             self.identify_subnets(cross_segment_traffic)
             return cross_segment_traffic
 
     def identify_chatty_systems(self):
+        """Count the number of inbound and outbound connections for each host"""
 
+        # Description of the results and how they should be interpreted
         description_conn_local = "A large number of local connections typically indicates a server. Ensure talkative systems are servers and not adversaries enumerating the network."
         description_conn_external = "External connection can indicate malware command and control, data exfiltration. Verify that these external connections are intended."
 
+        # Mappings from base field/column names to the desired names of the columns for the report
         display_cols_conversion = {
             "id.orig_h": "src_endpoint.ip",
             "id.resp_h": "total_dst",
         }
 
+        # The columns to be recorded in the report
         display_cols = ["src_endpoint.ip", "total_dst"]
 
+        # Series mapping source IPs with the number of destination IPs they communicate with
         dsts_per_source = self.conn_df.groupby(by=["id.orig_h"])["id.resp_h"].nunique()
 
         # Hosts talking to many internal IPs, indicating either a server or someone enumerating the network
@@ -429,6 +493,7 @@ class Assessor:
         # Represents hosts that are communicating with many external IPs, potentially representing C2
         external_contact_counts = dsts_per_source - dsts_per_source_local
 
+        # Create internal and external connection dataframes and apply column transformations 
         dsts_per_source_local_df = (
             dsts_per_source_local.to_frame()
             .reset_index()
@@ -450,6 +515,7 @@ class Assessor:
             external_contact_counts_df["total_dst"] != 0
         ]
 
+        # Add results to the final report collection
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
             description_conn_local,
@@ -462,6 +528,7 @@ class Assessor:
         )
 
     def dump_to_json(self):
+        """Save reports to .json files"""
         for df_k in self.analysis_dataframes.keys():
             df = self.analysis_dataframes[df_k][0]
             df_name = df_k.replace(" ", "_")
@@ -493,6 +560,7 @@ class Assessor:
         # self.dump_to_json()
 
     def generate_report(self):
+        """Convert reports to HTML for the basic front-end"""
         if self.analysis_dataframes != {}:
             dataframes_as_html = ""
             for df_name in self.analysis_dataframes.keys():
