@@ -77,7 +77,9 @@ def run_analysis():
     report = elevadr.generate_report()
     return f"""
     <!doctype html>
-    <title>Successful Uploads</title>
-    <h1>Complete!</h1>
+    <head>
+        <link rel="stylesheet" href="{url_for('static', filename="styles.css")}"/>
+        <title>Successful Uploads</title>
+    </head>
     {report}
     """

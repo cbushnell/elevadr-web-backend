@@ -45,5 +45,4 @@ def load_consts(consts_path):
 def port_risk(row, port_risk):
     """Matches ports in the Known Services table with information in the port_risk document"""
     values = port_risk.get(str(row['connection_info.port']), "NaN")
-    print(values)
     return pd.Series(values)

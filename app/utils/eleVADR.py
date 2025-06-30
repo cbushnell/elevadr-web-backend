@@ -7,6 +7,9 @@ import json
 import yaml
 import os
 
+from collections import namedtuple
+from dataclasses import dataclass
+
 from app.utils.utils import (
     convert_ips,
     convert_ip_to_str,
@@ -561,50 +564,83 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
-        report = Report(
-            self.path_to_zeek,
-            self.path_to_assessor_data,
-            self.analysis_dataframes
-        )
         # self.dump_to_json()
 
     def generate_report(self):
         """Convert reports to HTML for the basic front-end"""
         if self.analysis_dataframes != {}:
-            dataframes_as_html = ""
+            # Generate the formal report
+            report = Report(
+                self
+            )
+            report.generate_report()
+            report_html = report.compile_report()
+            report_html += "<hr>"
+            # Display the rest of the data
+            data_html = "<h1>Analysis Data:</h1>"
             for df_name in self.analysis_dataframes.keys():
                 if len(self.analysis_dataframes[df_name][0]) > 0:
-                    dataframes_as_html += (
+                    data_html += (
                         f"<h2>{df_name}:</h2>"
                         + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
                         + self.analysis_dataframes[df_name][0].to_html(index=False)
                     )
                 else:
-                    dataframes_as_html += (
+                    data_html += (
                         f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
                     )
-            return dataframes_as_html
+            return report_html + data_html
         return ""
+
+@dataclass
+class ReportSection:
+    name: str = None
+    risk: str = None
+    info: str = None
+    data: pd.DataFrame = None
 
 class Report:
     """Use information from the assessments to generate an actionable report"""
         
     def __init__(
     self,
-    path_to_zeek=None,
-    path_to_assessor_data=None,
-    analysis_dataframes=None
+    assessment: Assessor
     ):
         """Establish relative paths, load required data from analysis, and establish storage structures"""
-        self.path_to_zeek = path_to_zeek
-        self.path_to_assessor_data = path_to_assessor_data
-        self.ics_manufacturers = load_consts(
-            str(Path(self.path_to_assessor_data, "CONST.yml"))
-        )
-        self.analysis_dataframes = analysis_dataframes
+        self.assessment = assessment
         
-        # Collection of sections for the final report 
-        self.report_dataframes = {}
+        # Collection of analysis sections for the final report 
+        self.report_sections = []
+
+    def example_report(self):
+        report = ReportSection(name="Example Report")
+        report.risk = "High"
+        report.info = "Not too much to say about this one, honestly"
+        report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
+        self.report_sections.append(report)
+
+    def remote_access_report(self):
+        report = ReportSection(name="Network - Remote Access:")
+        report.risk = "High"
+        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
+        df = self.assessment.analysis_dataframes['Known Services'][0]
+        report.data = df[pd.DataFrame(df['Categories'])['Categories'].str.contains("Remote")] #.str.contains("Remote Access")]#['connection_info.unmapped.service_description', 'Description']
+        self.report_sections.append(report)
+
+    def generate_report(self):
+        self.example_report()
+        self.remote_access_report()
+
+    def compile_report(self):
+        report = "<h1>Report:</h1>"
+        for report_section in self.report_sections:
+            report += (
+                        f"<h2>{report_section.name}:</h2>"
+                        + f"<h3>Risk:{report_section.risk}</h3>"
+                        + f"<p>{report_section.info}</p>"
+                        + report_section.data.to_html(index=False)
+                    )
+        return report
 
     
 
