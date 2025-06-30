@@ -173,7 +173,6 @@ class Assessor:
             "connection_info.protocol_name",
             "connection_info.unmapped.service_description",
             "connection_info.unmapped.system_type",
-            "connection_info.unmapped.system_type",
         ]
 
         # Set of ports with assigned services through IANA
@@ -210,7 +209,9 @@ class Assessor:
         risk_service_match_df = known_services_df.apply(
             lambda row: port_risk(row, self.port_risk), axis=1
         )
-
+        self.known_ics_services = known_services_df[
+            (known_services_df["connection_info.unmapped.system_type"] == "ICS")
+        ]
         # Adding risky port descriptions and risk categories to the report
         known_risky_services_df = pd.DataFrame({})
         risk_service_match_df = risk_service_match_df[["description", "categories"]]
@@ -220,7 +221,6 @@ class Assessor:
         known_risky_services_df = known_risky_services_df.rename(
             columns={"description": "Description", "categories": "Categories"}
         ).dropna()  # Move this to the display columns list later
-
         # Assign dataframe to the collection of final reports
         self.analysis_dataframes["Known Services"] = (
             known_risky_services_df,
@@ -300,7 +300,7 @@ class Assessor:
 
     def identify_local_vlans(self):
         """Identify the /24 subnet membership for origin and destination hosts. Create new columns for each connection in the conn dataframe to record their associated subnet.
-        
+
         Returns:
             cidrs: List of local subnets present in the traffic
         """
@@ -347,9 +347,9 @@ class Assessor:
 
     def identify_subnets(self, cross_segment_traffic):
         """Create report for connections that may be communicating across subnets.
-        
+
         Parameters:
-            cross_segment_traffic: Dataframe containing conn_df cross-segment records 
+            cross_segment_traffic: Dataframe containing conn_df cross-segment records
         """
 
         # Description of the results and how they should be interpreted
@@ -395,6 +395,7 @@ class Assessor:
             )
 
     def merge_with_ICS(self, right_merge):
+        """Takes a given provided dataframe and merges with the known OT manufacturers and known ICS services. Intended to focus cross segment traffic to known bad cases (OT cross segment)"""
         # Known OT Manufacturer + Cross Segment - select src_endpoint.ip, src_endpoint.port, service_name, where device.vendor_name and device.ip == src_endpoint.ip or device.ip == dst_endpoint.ip
         src_cross_segment_OT = pd.merge(
             self.matched_manufacturers_df,
@@ -418,34 +419,36 @@ class Assessor:
         )
 
         #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
-        # src_cross_segment_with_OT_ports = pd.merge(
-        #     ToDo - known_ics_services,
-        #     right_merge,
-        #     left_on=["Port Number"], ToDo -
-        #     right_on=["src_endpoint.port"],
-        # )
+        src_cross_segment_with_OT_ports = pd.merge(
+            self.known_ics_services,
+            right_merge,
+            left_on=["connection_info.port"],
+            right_on=["src_endpoint.port"],
+        )
 
         #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
-        # dst_cross_segment_with_OT_ports = pd.merge(
-        #     ToDo - known_ics_services,
-        #     right_merge,
-        #     left_on=["Port Number"], ToDo -
-        #     right_on=["dst_endpoint.port"],
-        # )
-        # cross_segment_OT_services = pd.concat(
-        #     [src_cross_segment_with_OT_ports, dst_cross_segment_with_OT_ports], axis=0
-        # )
-        # self.analysis_dataframes["Systems Utilizing ICS Services Communicating Across Segments"] = cross_segment_OT_services
+        dst_cross_segment_with_OT_ports = pd.merge(
+            self.known_ics_services,
+            right_merge,
+            left_on=["connection_info.port"],
+            right_on=["dst_endpoint.port"],
+        )
+        cross_segment_OT_services = pd.concat(
+            [src_cross_segment_with_OT_ports, dst_cross_segment_with_OT_ports], axis=0
+        )
+        self.analysis_dataframes[
+            "Systems Utilizing ICS Services Communicating Across Segments"
+        ] = cross_segment_OT_services
 
     def check_segmented(self):
         """Collect connections assumed to be communicating cross-segment, while filtering out broadcast addresses.
-        
+
         Returns:
-            cross_segment_traffic: Dataframe containing conn_df cross-segment records 
+            cross_segment_traffic: Dataframe containing conn_df cross-segment records
         """
         # Going to skip anything with IPv6 for now, since it has a different subnet structure
         if "6" not in self.conn_df["connection_info.protocol_ver"].unique():
-            
+
             # Check for different CIDRs communicating ['/24/'] and ['/24_resp']
             self.identify_local_vlans()
 
@@ -493,7 +496,7 @@ class Assessor:
         # Represents hosts that are communicating with many external IPs, potentially representing C2
         external_contact_counts = dsts_per_source - dsts_per_source_local
 
-        # Create internal and external connection dataframes and apply column transformations 
+        # Create internal and external connection dataframes and apply column transformations
         dsts_per_source_local_df = (
             dsts_per_source_local.to_frame()
             .reset_index()
@@ -588,9 +591,9 @@ if __name__ == "__main__":
     )
     a.check_ports()
     # a.identify_chatty_systems()
-    # a.ics_manufacturer_col()
-    # a.check_segmented()
-    # a.check_ICS_and_cross_segment()
+    a.ics_manufacturer_col()
+    a.check_segmented()
+    a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
     # a.identify_local_vlans()
     # a.check_external()
 
