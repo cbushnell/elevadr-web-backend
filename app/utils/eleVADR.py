@@ -530,6 +530,7 @@ class Assessor:
             description_conn_external,
         )
 
+    # TODO: Clear the exisiting jsons within the given dir and only upload jsons which have dataframes with data
     def dump_to_json(self):
         """Save reports to .json files"""
         for df_k in self.analysis_dataframes.keys():
@@ -560,6 +561,11 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
+        report = Report(
+            self.path_to_zeek,
+            self.path_to_assessor_data,
+            self.analysis_dataframes
+        )
         # self.dump_to_json()
 
     def generate_report(self):
@@ -580,6 +586,27 @@ class Assessor:
             return dataframes_as_html
         return ""
 
+class Report:
+    """Use information from the assessments to generate an actionable report"""
+        
+    def __init__(
+    self,
+    path_to_zeek=None,
+    path_to_assessor_data=None,
+    analysis_dataframes=None
+    ):
+        """Establish relative paths, load required data from analysis, and establish storage structures"""
+        self.path_to_zeek = path_to_zeek
+        self.path_to_assessor_data = path_to_assessor_data
+        self.ics_manufacturers = load_consts(
+            str(Path(self.path_to_assessor_data, "CONST.yml"))
+        )
+        self.analysis_dataframes = analysis_dataframes
+        
+        # Collection of sections for the final report 
+        self.report_dataframes = {}
+
+    
 
 if __name__ == "__main__":
 
