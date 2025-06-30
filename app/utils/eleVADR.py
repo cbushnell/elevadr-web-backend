@@ -646,7 +646,7 @@ class Report:
         report.risk = "High"
         report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
         df = self.assessment.analysis_dataframes['Known Services'][0]
-        report.data = df[pd.DataFrame(df['Categories'])['Categories'].str.contains("Remote")] #.str.contains("Remote Access")]#['connection_info.unmapped.service_description', 'Description']
+        report.data = df
         self.report_sections.append(report)
 
     def generate_report(self):
