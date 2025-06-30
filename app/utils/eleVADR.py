@@ -405,6 +405,7 @@ class Assessor:
             right_merge,
             left_on=["device.ip"],
             right_on=["src_endpoint.ip"],
+            how="outer",
             # self.analysis_dataframes["Cross Segment Communication"][0], left_on=["device.ip"], right_on=["src_endpoint.ip"]
         )
         # OT Systems being communicated to cross segment
@@ -413,35 +414,56 @@ class Assessor:
             right_merge,
             left_on=["device.ip"],
             right_on=["dst_endpoint.ip"],
+            how="outer",
         )
         cross_segment_OT_systems = pd.concat(
             [src_cross_segment_OT, dst_cross_segment_OT], axis=0
         )
-        self.analysis_dataframes["OT Systems Communicating Across Segments"] = (
-            cross_segment_OT_systems
-        )
+        # self.analysis_dataframes["OT Systems Communicating Across Segments"] = (
+        #     cross_segment_OT_systems
+        # )
 
         #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
         src_cross_segment_with_OT_ports = pd.merge(
             self.known_ics_services,
             right_merge,
-            left_on=["connection_info.port"],
-            right_on=["src_endpoint.port"],
+            left_on=["connection_info.port", "connection_info.protocol_name"],
+            right_on=["src_endpoint.port", "connection_info.protocol_name"],
+            how="outer",
         )
-
         #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
         dst_cross_segment_with_OT_ports = pd.merge(
             self.known_ics_services,
             right_merge,
-            left_on=["connection_info.port"],
-            right_on=["dst_endpoint.port"],
+            left_on=["connection_info.port", "connection_info.protocol_name"],
+            right_on=["dst_endpoint.port", "connection_info.protocol_name"],
+            how="outer",
         )
         cross_segment_OT_services = pd.concat(
             [src_cross_segment_with_OT_ports, dst_cross_segment_with_OT_ports], axis=0
         )
+        # self.analysis_dataframes[
+        #     "Systems Utilizing ICS Services Communicating Across Segments"
+        # ] = cross_segment_OT_services
+
+        SIMPLER_FIELD_NAMES = [
+            "src_endpoint.ip",
+            "src_endpoint.port",
+            "dst_endpoint.ip",
+            "dst_endpoint.port",
+            "connection_info.unmapped.src_subnet",
+            "connection_info.unmapped.dst_subnet",
+        ]
+        all_the_data = pd.concat(
+            [
+                cross_segment_OT_services[SIMPLER_FIELD_NAMES],
+                cross_segment_OT_systems[SIMPLER_FIELD_NAMES],
+            ],
+            axis=0,
+        )
         self.analysis_dataframes[
-            "Systems Utilizing ICS Services Communicating Across Segments"
-        ] = cross_segment_OT_services
+            "ICS Systems/Services Communicating Across Segments"
+        ] = all_the_data
 
     def check_segmented(self):
         """Collect connections assumed to be communicating cross-segment, while filtering out broadcast addresses.
