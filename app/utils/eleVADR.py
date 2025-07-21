@@ -76,6 +76,16 @@ class Assessor:
             {}
         )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
 
+    def create_allowlist(self):
+        # Based on the PCAP, create a json allowlist of src:dst
+        allowlist = {}
+        for src_ip in self.conn_df["id.orig_h"].unique():
+            dsts_per_src = self.conn_df.loc[
+                self.conn_df["id.orig_h"] == src_ip, ["id.resp_h", "id.resp_p"]
+            ].drop_duplicates()
+            allowlist[src_ip] = dsts_per_src
+        self.analysis_dataframes["allowlist"] = allowlist
+
     def ics_manufacturer_col(self):
         """Identify host device manufacturers by comparing MAC addresses in pcap to Organizationally Unique Identifiers (OUIs)"""
 
@@ -592,14 +602,6 @@ class Assessor:
         return (len(unique_devices), unique_devices)
         # todo - maybe something can be done here with comparing the numbers of MACs to IPs, checking for anything changing frequently. Do with the IDS sprint
 
-    def get_unique_cross_segment_OT_devices(self):
-        num_unique_cross_ot = len(
-            self.analysis_dataframes[
-                "ICS Systems/Services Communicating Across Segments"
-            ].unique()
-        )
-        return num_unique_cross_ot
-
     def user_validation_approach(self):
         pass
 
@@ -675,18 +677,32 @@ class Report:
 
     def devices_panel(self):
         # Num Devices
+        device_metrics = [
+            self.assessment.analysis_dataframes["num_devices"],
+            self.assessment.analysis_dataframes["num_OT_devices"],
+            self.assessment.analysis_dataframes["num_cross_segment_OT"],
+            # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
+        ]
+        # Note - data passed as tuple to allow for click-in to see data source
+        # num devices, [0][0]
+        # num OT devices, [1][0]
+        # num cross segment OT, [2][0]
+        # display of cross segment OT, [2][1]
+        return device_metrics
 
-        # Num OT Devices
-        # Num Cross Segment OT
-        # List of Cross Segment OT for Panel
-        pass
-
-    def services_graphic(self):
-        # Num Services
-        # Num OT Services
-        # Num Concerning Services
-        # List of Concerning Services
-        pass
+    def services_panel(self):
+        service_metrics = [
+            self.assessment.analysis_dataframes["num_services"],
+            self.assessment.analysis_dataframes["num_OT_services"],
+            self.assessment.analysis_dataframes["num_risky_services"],
+            # self.assessment.analysis_dataframes["risky_services_display"]
+        ]
+        # Note - data passed as tuple to allow for click-in to see data source
+        # num services, [0][0]
+        # num OT services, [1][0]
+        # num risky services, [2][0]
+        # display of risky services, [2][1]
+        return service_metrics
 
     def top_level_actions(self):
         pass
@@ -749,10 +765,10 @@ if __name__ == "__main__":
     a.check_ports()
     # a.identify_chatty_systems()
     a.ics_manufacturer_col()
-
-    a.check_segmented()
-    a.create_devices_display()
-    a.create_services_display()
+    a.create_allowlist()
+    # a.check_segmented()
+    # a.create_devices_display()
+    # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
     # a.identify_local_vlans()
     # a.check_external()
