@@ -76,6 +76,16 @@ class Assessor:
             {}
         )  # Stored as a dict with the format {"dataframe name": (dataframe, description)}
 
+    def create_allowlist(self):
+        # Based on the PCAP, create a json allowlist of src:dst
+        allowlist = {}
+        for src_ip in self.conn_df["id.orig_h"].unique():
+            dsts_per_src = self.conn_df.loc[
+                self.conn_df["id.orig_h"] == src_ip, ["id.resp_h", "id.resp_p"]
+            ].drop_duplicates()
+            allowlist[src_ip] = dsts_per_src
+        self.analysis_dataframes["allowlist"] = allowlist
+
     def ics_manufacturer_col(self):
         """Identify host device manufacturers by comparing MAC addresses in pcap to Organizationally Unique Identifiers (OUIs)"""
 
@@ -207,6 +217,7 @@ class Assessor:
         known_services_df = port_to_service_map[display_cols].sort_values(
             "connection_info.port"
         )
+        self.known_services_df = known_services_df
 
         # Match known risky ports
         risk_service_match_df = known_services_df.apply(
@@ -221,12 +232,12 @@ class Assessor:
         known_risky_services_df = pd.concat(
             [known_services_df, risk_service_match_df], axis=1
         )
-        known_risky_services_df = known_risky_services_df.rename(
+        self.known_risky_services_df = known_risky_services_df.rename(
             columns={"description": "Description", "categories": "Categories"}
         ).dropna()  # Move this to the display columns list later
         # Assign dataframe to the collection of final reports
         self.analysis_dataframes["Known Services"] = (
-            known_risky_services_df,
+            self.known_risky_services_df,
             description,
         )
 
@@ -391,79 +402,69 @@ class Assessor:
             cross_segment_traffic = cross_segment_traffic.rename(
                 columns=display_cols_conversion
             )
-            cross_segment_traffic_display = cross_segment_traffic[display_cols]
+            self.cross_segment_traffic_display = cross_segment_traffic[display_cols]
             self.analysis_dataframes["Cross Segment Communication"] = (
-                cross_segment_traffic_display.drop_duplicates(),
+                self.cross_segment_traffic_display.drop_duplicates(),
                 description,
             )
 
-    def merge_with_ICS(self, right_merge):
-        """Takes a given provided dataframe and merges with the known OT manufacturers and known ICS services. Intended to focus cross segment traffic to known bad cases (OT cross segment)"""
-        # Known OT Manufacturer + Cross Segment - select src_endpoint.ip, src_endpoint.port, service_name, where device.vendor_name and device.ip == src_endpoint.ip or device.ip == dst_endpoint.ip
-        src_cross_segment_OT = pd.merge(
-            self.matched_manufacturers_df,
-            right_merge,
-            left_on=["device.ip"],
-            right_on=["src_endpoint.ip"],
-            how="outer",
-            # self.analysis_dataframes["Cross Segment Communication"][0], left_on=["device.ip"], right_on=["src_endpoint.ip"]
-        )
-        # OT Systems being communicated to cross segment
-        dst_cross_segment_OT = pd.merge(
-            self.matched_manufacturers_df,
-            right_merge,
-            left_on=["device.ip"],
-            right_on=["dst_endpoint.ip"],
-            how="outer",
-        )
-        cross_segment_OT_systems = pd.concat(
-            [src_cross_segment_OT, dst_cross_segment_OT], axis=0
-        )
-        # self.analysis_dataframes["OT Systems Communicating Across Segments"] = (
-        #     cross_segment_OT_systems
-        # )
-
-        #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
-        src_cross_segment_with_OT_ports = pd.merge(
-            self.known_ics_services,
-            right_merge,
-            left_on=["connection_info.port", "connection_info.protocol_name"],
-            right_on=["src_endpoint.port", "connection_info.protocol_name"],
-            how="outer",
-        )
-        #  Known OT Services + Cross Segment - show devices with OT services that cross boundaries, even if those services aren't the ones crossing boundaries (hey, could be a web app)
-        dst_cross_segment_with_OT_ports = pd.merge(
-            self.known_ics_services,
-            right_merge,
-            left_on=["connection_info.port", "connection_info.protocol_name"],
-            right_on=["dst_endpoint.port", "connection_info.protocol_name"],
-            how="outer",
-        )
-        cross_segment_OT_services = pd.concat(
-            [src_cross_segment_with_OT_ports, dst_cross_segment_with_OT_ports], axis=0
-        )
-        # self.analysis_dataframes[
-        #     "Systems Utilizing ICS Services Communicating Across Segments"
-        # ] = cross_segment_OT_services
-
-        SIMPLER_FIELD_NAMES = [
-            "src_endpoint.ip",
-            "src_endpoint.port",
-            "dst_endpoint.ip",
-            "dst_endpoint.port",
-            "connection_info.unmapped.src_subnet",
-            "connection_info.unmapped.dst_subnet",
-        ]
-        all_the_data = pd.concat(
-            [
-                cross_segment_OT_services[SIMPLER_FIELD_NAMES],
-                cross_segment_OT_systems[SIMPLER_FIELD_NAMES],
+    def create_devices_display(self):
+        # Known OT Manufacturer + Known OT Service
+        # IPs using observed OT services
+        self.analysis_dataframes["num_devices"] = self.get_unique_devices()
+        ot_services_df = pd.merge(
+            self.conn_df[
+                [
+                    "id.orig_h",
+                    "id.resp_h",
+                    "id.resp_p",
+                ]
             ],
-            axis=0,
+            self.known_ics_services,
+            left_on="id.resp_p",
+            right_on=["connection_info.port"],
+            how="inner",
+        ).drop_duplicates()
+        OT_device_ips = pd.concat(
+            [ot_services_df["id.orig_h"], ot_services_df["id.resp_h"]]
         )
-        self.analysis_dataframes[
-            "ICS Systems/Services Communicating Across Segments"
-        ] = all_the_data
+        # Add in known OT manufacturers, where the OT manufacturer is the src_ip
+        OT_device_ips = pd.concat(
+            [OT_device_ips, self.matched_manufacturers_df["device.ip"]]
+        ).unique()
+        num_ot_devices = len(OT_device_ips)
+        # to merge with manufacturers, simply grab from conn.log where the IPs match and then drop dups
+        ot_manufactured_comms = self.conn_df[
+            self.conn_df["id.orig_h"].isin(self.matched_manufacturers_df["device.ip"])
+        ]
+        ot_services_and_manufacturers = pd.concat(
+            [ot_services_df, ot_manufactured_comms]
+        )
+        # Now merge with cross segment
+        cross_segment_OT_services = pd.merge(
+            ot_services_and_manufacturers,
+            self.cross_segment_traffic_display,
+            left_on="id.orig_h",
+            right_on="src_endpoint.ip",
+            how="right",
+        )[
+            [
+                "src_endpoint.ip",
+                "dst_endpoint.ip",
+                "dst_endpoint.port",
+                "connection_info.unmapped.src_subnet",
+                "connection_info.unmapped.dst_subnet",
+            ]
+        ].drop_duplicates()
+        num_cross_segment_OT_connections = len(cross_segment_OT_services)
+        self.analysis_dataframes["num_OT_devices"] = (num_ot_devices, OT_device_ips)
+        self.analysis_dataframes["num_cross_segment_OT"] = (
+            num_cross_segment_OT_connections,
+            cross_segment_OT_services,
+        )
+        self.analysis_dataframes["cross_segment_OT_devices_display"] = (
+            self.analysis_dataframes["num_cross_segment_OT"][1]
+        )
 
     def check_segmented(self):
         """Collect connections assumed to be communicating cross-segment, while filtering out broadcast addresses.
@@ -569,6 +570,38 @@ class Assessor:
                 str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
             )
 
+    def create_services_display(self):
+        self.analysis_dataframes["num_services"] = (
+            len(self.known_services_df["port_num"].unique()),
+            self.known_services_df,
+        )
+        self.analysis_dataframes["num_OT_services"] = (
+            len(self.known_ics_services),
+            self.known_ics_services,
+        )
+        self.analysis_dataframes["num_risky_services"] = (
+            len(self.known_risky_services_df),
+            self.known_risky_services_df,
+        )
+        # todo - confirm remote services listed here / are high priority
+        self.analysis_dataframes["risky_services_display"] = self.analysis_dataframes[
+            "num_risky_services"
+        ][1]
+
+    def create_services_bar_chart(self):
+        """returns count of services with high,medium,low and corresponding list of services"""
+        self.known_risky_services_df
+
+    def get_unique_devices(self):
+        unique_devices = pd.concat(
+            [
+                self.conn_df[(self.conn_df["local_orig"] == "T")]["orig_l2_addr"],
+                self.conn_df[(self.conn_df["local_resp"] == "T")]["resp_l2_addr"],
+            ]
+        ).unique()
+        return (len(unique_devices), unique_devices)
+        # todo - maybe something can be done here with comparing the numbers of MACs to IPs, checking for anything changing frequently. Do with the IDS sprint
+
     def user_validation_approach(self):
         pass
 
@@ -579,6 +612,12 @@ class Assessor:
     def identify_controllers(self):
         # uses PCAP and MAC information to identify potential PLCs
         pass
+
+    def get_date_range(self):
+        self.analysis_dataframes["date"] = (
+            self.conn_df.index.min(),
+            self.conn_df.index.max(),
+        )
 
     def run_analysis(self):
         self.ics_manufacturer_col()
@@ -592,9 +631,7 @@ class Assessor:
         """Convert reports to HTML for the basic front-end"""
         if self.analysis_dataframes != {}:
             # Generate the formal report
-            report = Report(
-                self
-            )
+            report = Report(self)
             report.generate_report()
             report_html = report.compile_report()
             report_html += "<hr>"
@@ -614,91 +651,90 @@ class Assessor:
             return report_html + data_html
         return ""
 
+
 @dataclass
 class ReportSection:
     name: str = None
     risk: str = None
     info: str = None
+    exec: str = None
     data: pd.DataFrame = None
+
 
 class Report:
     """Use information from the assessments to generate an actionable report"""
-        
-    def __init__(
-    self,
-    assessment: Assessor
-    ):
+
+    def __init__(self, assessment: Assessor):
         """Establish relative paths, load required data from analysis, and establish storage structures"""
         self.assessment = assessment
-        
-        # Collection of analysis sections for the final report 
+
+        # Collection of analysis sections for the final report
         self.report_sections = []
+
+    def services_metrics(self):
+
+        pass
+
+    def devices_panel(self):
+        # Num Devices
+        device_metrics = [
+            self.assessment.analysis_dataframes["num_devices"],
+            self.assessment.analysis_dataframes["num_OT_devices"],
+            self.assessment.analysis_dataframes["num_cross_segment_OT"],
+            # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
+        ]
+        # Note - data passed as tuple to allow for click-in to see data source
+        # num devices, [0][0]
+        # num OT devices, [1][0]
+        # num cross segment OT, [2][0]
+        # display of cross segment OT, [2][1]
+        return device_metrics
+
+    def services_panel(self):
+        service_metrics = [
+            self.assessment.analysis_dataframes["num_services"],
+            self.assessment.analysis_dataframes["num_OT_services"],
+            self.assessment.analysis_dataframes["num_risky_services"],
+            # self.assessment.analysis_dataframes["risky_services_display"]
+        ]
+        # Note - data passed as tuple to allow for click-in to see data source
+        # num services, [0][0]
+        # num OT services, [1][0]
+        # num risky services, [2][0]
+        # display of risky services, [2][1]
+        return service_metrics
+
+    def top_level_actions(self):
+        pass
 
     def example_report(self):
         report = ReportSection(name="Example Report")
-        report.risk = "High"
+        report.risk = "Low"
         report.info = "Not too much to say about this one, honestly"
+        report.exec = "Execute this example action."
         report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
         self.report_sections.append(report)
 
     def remote_access_report(self):
         report = ReportSection(name="Network - Remote Access:")
         report.risk = "High"
-        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. "
-        df = self.assessment.analysis_dataframes['Known Services'][0]
-        report.data = df[
-            df.Categories.map(lambda x: str(x)).str.contains("Remote")
-        ]
-        report.data = report.data[
-            [
-                "connection_info.port",
-                "connection_info.unmapped.service_description",
-                "Description",
-                "Categories"
-            ]
-        ]
+        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
+        report.exec = "Verify observed remote access paths are 1) known, and 2) use unique accounts with strong passwords"
+        df = self.assessment.analysis_dataframes["Known Services"][0]
+        report.data = df
         self.report_sections.append(report)
 
-    def remote_access_report(self):
-        report = ReportSection(name="Network - Remote Access:")
-        report.risk = "High"
-        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. "
-        df = self.assessment.analysis_dataframes['Known Services'][0]
-        report.data = df[
-            df.Categories.map(lambda x: str(x)).str.contains("Remote")
-        ]
-        report.data = report.data[
-            [
-                "connection_info.port",
-                "connection_info.unmapped.service_description",
-                "Description",
-                "Categories"
-            ]
-        ]
-        # Only submit the section if there were results
-        if len(report.data) > 0:
-            self.report_sections.append(report)
+    def cross_segment_OT_report(self):
+        # If dataframe exists, then
+        report = ReportSection(name="R")
+        pass
 
-    def legacy_protocol_report(self):
-        report = ReportSection(name="Network - Legacy Protocols")
-        report.risk = "High"
-        report.info = "Legacy protocols can lead to data exposure and potentially unauthenticated command injection. Is the device capable of using a more modern and secure protocol?"
-        df = self.assessment.analysis_dataframes['Known Services'][0]
-        report.data = df[
-            df.Categories.map(lambda x: str(x)).str.contains("Legacy")
-        ]
-        report.data = report.data[
-            [
-                "connection_info.port",
-                "connection_info.unmapped.service_description",
-                "Description",
-                "Categories"
-            ]
-        ]
-        # Only submit the section if there were results
-        print(report.data)
-        if len(report.data) > 0:
-            self.report_sections.append(report)
+    def OT_and_remote_report(self):
+        pass
+
+    def generate_deliverables(self):
+        # Given our conn.log, create an allowlist for OT components.
+        pass
 
     def generate_report(self):
         self.example_report()
@@ -706,17 +742,17 @@ class Report:
         self.legacy_protocol_report()
 
     def compile_report(self):
+        header = "devices "
         report = "<h1>Report:</h1>"
         for report_section in self.report_sections:
             report += (
-                        f"<h2>{report_section.name}:</h2>"
-                        + f"<h3>Risk:{report_section.risk}</h3>"
-                        + f"<p>{report_section.info}</p>"
-                        + report_section.data.to_html(index=False)
-                    )
+                f"<h2>{report_section.name}:</h2>"
+                + f"<h3>Risk:{report_section.risk}</h3>"
+                + f"<p>{report_section.info}</p>"
+                + report_section.data.to_html(index=False)
+            )
         return report
 
-    
 
 if __name__ == "__main__":
 
@@ -726,11 +762,15 @@ if __name__ == "__main__":
         "zeek_scripts",
         "app/data/assessor_data",
     )
+    # a.get_date_range()
     a.check_ports()
     # a.identify_chatty_systems()
     a.ics_manufacturer_col()
-    a.check_segmented()
-    a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
+    a.create_allowlist()
+    # a.check_segmented()
+    # a.create_devices_display()
+    # a.create_services_display()
+    # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
     # a.identify_local_vlans()
     # a.check_external()
 
