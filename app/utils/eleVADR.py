@@ -636,7 +636,7 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
-        # self.dump_to_json()
+        self.dump_to_json()
 
     def generate_report(self):
         """Convert reports to HTML for the basic front-end"""
@@ -774,6 +774,7 @@ class Report:
     def generate_report(self):
         self.example_report()
         self.remote_access_report()
+        self.legacy_protocol_report()
 
     def compile_report(self):
         header = "devices "
