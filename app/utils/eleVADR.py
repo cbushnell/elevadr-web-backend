@@ -586,7 +586,7 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
-        # self.dump_to_json()
+        self.dump_to_json()
 
     def generate_report(self):
         """Convert reports to HTML for the basic front-end"""
@@ -644,14 +644,66 @@ class Report:
     def remote_access_report(self):
         report = ReportSection(name="Network - Remote Access:")
         report.risk = "High"
-        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
+        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. "
         df = self.assessment.analysis_dataframes['Known Services'][0]
-        report.data = df
+        report.data = df[
+            df.Categories.map(lambda x: str(x)).str.contains("Remote")
+        ]
+        report.data = report.data[
+            [
+                "connection_info.port",
+                "connection_info.unmapped.service_description",
+                "Description",
+                "Categories"
+            ]
+        ]
         self.report_sections.append(report)
+
+    def remote_access_report(self):
+        report = ReportSection(name="Network - Remote Access:")
+        report.risk = "High"
+        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. "
+        df = self.assessment.analysis_dataframes['Known Services'][0]
+        report.data = df[
+            df.Categories.map(lambda x: str(x)).str.contains("Remote")
+        ]
+        report.data = report.data[
+            [
+                "connection_info.port",
+                "connection_info.unmapped.service_description",
+                "Description",
+                "Categories"
+            ]
+        ]
+        # Only submit the section if there were results
+        if len(report.data) > 0:
+            self.report_sections.append(report)
+
+    def legacy_protocol_report(self):
+        report = ReportSection(name="Network - Legacy Protocols")
+        report.risk = "High"
+        report.info = "Legacy protocols can lead to data exposure and potentially unauthenticated command injection. Is the device capable of using a more modern and secure protocol?"
+        df = self.assessment.analysis_dataframes['Known Services'][0]
+        report.data = df[
+            df.Categories.map(lambda x: str(x)).str.contains("Legacy")
+        ]
+        report.data = report.data[
+            [
+                "connection_info.port",
+                "connection_info.unmapped.service_description",
+                "Description",
+                "Categories"
+            ]
+        ]
+        # Only submit the section if there were results
+        print(report.data)
+        if len(report.data) > 0:
+            self.report_sections.append(report)
 
     def generate_report(self):
         self.example_report()
         self.remote_access_report()
+        self.legacy_protocol_report()
 
     def compile_report(self):
         report = "<h1>Report:</h1>"
