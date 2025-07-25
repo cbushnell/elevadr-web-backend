@@ -45,7 +45,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        self.zeekify()
+        # self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -572,7 +572,9 @@ class Assessor:
 
     def create_services_display(self):
         self.analysis_dataframes["num_services"] = (
-            len(self.known_services_df["port_num"].unique()),
+            len(
+                self.known_services_df["connection_info.unmapped.service_name"].unique()
+            ),
             self.known_services_df,
         )
         self.analysis_dataframes["num_OT_services"] = (
@@ -590,7 +592,16 @@ class Assessor:
 
     def create_services_bar_chart(self):
         """returns count of services with high,medium,low and corresponding list of services"""
-        self.known_risky_services_df
+        # self.known_risky_services_df is red
+        # self.known_ics_services is yellow
+        # any remote services should be tagged yellow/red
+        # everything else is green
+        medium_risk_services = []
+        services_bar_chart = {
+            "red": (len(self.known_risky_services_df), self.known_risky_services_df),
+            "yellow": (0, []),
+            "green": (len(self.known_services_df), self.known_services_df),
+        }
 
     def get_unique_devices(self):
         unique_devices = pd.concat(
@@ -677,12 +688,20 @@ class Report:
 
     def devices_panel(self):
         # Num Devices
+        print("Host Metrics")
         device_metrics = [
-            self.assessment.analysis_dataframes["num_devices"],
-            self.assessment.analysis_dataframes["num_OT_devices"],
-            self.assessment.analysis_dataframes["num_cross_segment_OT"],
+            ("Number of Hosts", self.assessment.analysis_dataframes["num_devices"]),
+            (
+                "Number of OT Hosts",
+                self.assessment.analysis_dataframes["num_OT_devices"],
+            ),
+            (
+                "Number of OT Hosts Communicating Across Segments",
+                self.assessment.analysis_dataframes["num_cross_segment_OT"],
+            ),
             # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
         ]
+        print(device_metrics)
         # Note - data passed as tuple to allow for click-in to see data source
         # num devices, [0][0]
         # num OT devices, [1][0]
@@ -691,12 +710,14 @@ class Report:
         return device_metrics
 
     def services_panel(self):
+        print("Services Metrics")
         service_metrics = [
-            self.assessment.analysis_dataframes["num_services"],
-            self.assessment.analysis_dataframes["num_OT_services"],
-            self.assessment.analysis_dataframes["num_risky_services"],
+            ("Number of Services", self.assessment.analysis_dataframes["num_services"]),
+            ("Number of OT Services", self.assessment.analysis_dataframes["num_OT_services"]),
+            ("Number of Risky Services", self.assessment.analysis_dataframes["num_risky_services"]),
             # self.assessment.analysis_dataframes["risky_services_display"]
         ]
+        print(service_metrics)
         # Note - data passed as tuple to allow for click-in to see data source
         # num services, [0][0]
         # num OT services, [1][0]
@@ -725,9 +746,23 @@ class Report:
         self.report_sections.append(report)
 
     def cross_segment_OT_report(self):
-        # If dataframe exists, then
-        report = ReportSection(name="R")
+        
         pass
+    
+    def reporting_algorithm(self):
+        #Check for top issues having data
+        #1 - Cross Segment OT
+        report = []
+        if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
+            # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
+            descr = f"eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. List of Culprits: {self.assessment.analysis_dataframes["num_cross_segment_OT"][1][["src_endpoint.ip"]].value_counts()}"
+            report.append(descr)
+        #2 - OT Remote Access - external into OT
+        #ToDO - Isolate Remote Access Protocols
+        #3 Known outdated services
+        #ToDo - Isolate outdated services
+        
+
 
     def OT_and_remote_report(self):
         pass
@@ -761,12 +796,16 @@ if __name__ == "__main__":
         "zeek_scripts",
         "app/data/assessor_data",
     )
-    # a.get_date_range()
+    a.get_date_range()
     a.check_ports()
     # a.identify_chatty_systems()
     a.ics_manufacturer_col()
-    a.create_allowlist()
-    # a.check_segmented()
+    # a.create_allowlist()
+    a.check_segmented()
+    a.create_devices_display()
+    a.create_services_display()
+    r = Report(a)
+    r.devices_panel()
     # a.create_devices_display()
     # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
