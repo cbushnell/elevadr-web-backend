@@ -408,10 +408,10 @@ class Assessor:
                 description,
             )
 
-    def create_devices_display(self):
+    def create_devices_display(self): 
         # Known OT Manufacturer + Known OT Service
         # IPs using observed OT services
-        self.analysis_dataframes["num_devices"] = self.get_unique_devices()
+        self.analysis_dataframes["num_devices"] = self.get_unique_devices() # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
         ot_services_df = pd.merge(
             self.conn_df[
                 [
@@ -570,7 +570,7 @@ class Assessor:
                 str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
             )
 
-    def create_services_display(self):
+    def create_services_display(self): # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
         self.analysis_dataframes["num_services"] = (
             len(
                 self.known_services_df["connection_info.unmapped.service_name"].unique()
@@ -636,29 +636,37 @@ class Assessor:
         self.check_external()
         self.check_segmented()
         self.identify_chatty_systems()
-        self.dump_to_json()
+
+        # Metrics
+        self.create_services_display()
+        self.create_devices_display()
+
+        # self.dump_to_json()
 
     def generate_report(self):
         """Convert reports to HTML for the basic front-end"""
         if self.analysis_dataframes != {}:
             # Generate the formal report
-            report = Report(self)
+            report = Report(assessment=self)
             report.generate_report()
             report_html = report.compile_report()
             report_html += "<hr>"
             # Display the rest of the data
             data_html = "<h1>Analysis Data:</h1>"
             for df_name in self.analysis_dataframes.keys():
-                if len(self.analysis_dataframes[df_name][0]) > 0:
-                    data_html += (
-                        f"<h2>{df_name}:</h2>"
-                        + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
-                        + self.analysis_dataframes[df_name][0].to_html(index=False)
-                    )
-                else:
-                    data_html += (
-                        f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
-                    )
+                try: # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
+                    if len(self.analysis_dataframes[df_name][0]) > 0:
+                        data_html += (
+                            f"<h2>{df_name}:</h2>"
+                            + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
+                            + self.analysis_dataframes[df_name][0].to_html(index=False)
+                        )
+                    else:
+                        data_html += (
+                            f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
+                        )
+                except:
+                    continue
             return report_html + data_html
         return ""
 
@@ -680,7 +688,7 @@ class Report:
         self.assessment = assessment
 
         # Collection of analysis sections for the final report
-        self.report_sections = []
+        self.executive_report_sections = []
 
     def services_metrics(self):
 
@@ -734,7 +742,7 @@ class Report:
         report.info = "Not too much to say about this one, honestly"
         report.exec = "Execute this example action."
         report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
-        self.report_sections.append(report)
+        self.executive_report_sections.append(report)
 
     def remote_access_report(self):
         report = ReportSection(name="Network - Remote Access:")
@@ -743,10 +751,9 @@ class Report:
         report.exec = "Verify observed remote access paths are 1) known, and 2) use unique accounts with strong passwords"
         df = self.assessment.analysis_dataframes["Known Services"][0]
         report.data = df
-        self.report_sections.append(report)
+        self.executive_report_sections.append(report)
 
     def cross_segment_OT_report(self):
-        
         pass
     
     def reporting_algorithm(self):
@@ -761,8 +768,7 @@ class Report:
         #ToDO - Isolate Remote Access Protocols
         #3 Known outdated services
         #ToDo - Isolate outdated services
-        
-
+    
 
     def OT_and_remote_report(self):
         pass
@@ -772,20 +778,38 @@ class Report:
         pass
 
     def generate_report(self):
-        self.example_report()
+        # self.example_report()
         self.remote_access_report()
-        self.legacy_protocol_report()
+        # self.legacy_protocol_report()
 
     def compile_report(self):
-        header = "devices "
-        report = "<h1>Report:</h1>"
-        for report_section in self.report_sections:
-            report += (
-                f"<h2>{report_section.name}:</h2>"
-                + f"<h3>Risk:{report_section.risk}</h3>"
-                + f"<p>{report_section.info}</p>"
-                + report_section.data.to_html(index=False)
+        report = "<h1>eleVADR Report:</h1>"
+        # Executive Report Section
+        executive_report = "<h2>Executive Report:</h2>"
+        for executive_report_section in self.executive_report_sections:
+            executive_report += (
+                f"<h3>{executive_report_section.name}:</h3>"
+                + f"<h4>Risk:{executive_report_section.risk}</h4>"
+                + f"<p>{executive_report_section.info}</p>"
+                + executive_report_section.data.to_html(index=False)
             )
+        report += executive_report
+        # Services Panel
+        services_panel = "<h2>Detected Services:</h2>"
+        service_metrics = self.services_panel()
+        for metric in service_metrics:
+            services_panel += (
+                f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
+            )
+        report += services_panel
+        # Devices Panel
+        devices_panel = "<h2>Detected Devices:</h2>"
+        devices__metrics = self.devices_panel()
+        for metric in devices__metrics:
+            devices_panel += (
+                f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
+            )
+        report += devices_panel
         return report
 
 
