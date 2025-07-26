@@ -45,7 +45,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        # self.zeekify()
+        self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -234,7 +234,20 @@ class Assessor:
         )
         self.known_risky_services_df = known_risky_services_df.rename(
             columns={"description": "Description", "categories": "Categories"}
+            # Build out df based on categories
         ).dropna()  # Move this to the display columns list later
+        # Flag Remote Access Category
+        self.service_categories = self.known_risky_services_df.explode("Categories")[
+            [
+                "Categories",
+                "connection_info.unmapped.service_name",
+                "connection_info.port",
+            ]
+        ]
+        self.analysis_dataframes["Service Categories"] = (
+            self.service_categories,
+            "Risky services and their corresponding category",
+        )
         # Assign dataframe to the collection of final reports
         self.analysis_dataframes["Known Services"] = (
             self.known_risky_services_df,
@@ -713,8 +726,14 @@ class Report:
         print("Services Metrics")
         service_metrics = [
             ("Number of Services", self.assessment.analysis_dataframes["num_services"]),
-            ("Number of OT Services", self.assessment.analysis_dataframes["num_OT_services"]),
-            ("Number of Risky Services", self.assessment.analysis_dataframes["num_risky_services"]),
+            (
+                "Number of OT Services",
+                self.assessment.analysis_dataframes["num_OT_services"],
+            ),
+            (
+                "Number of Risky Services",
+                self.assessment.analysis_dataframes["num_risky_services"],
+            ),
             # self.assessment.analysis_dataframes["risky_services_display"]
         ]
         print(service_metrics)
@@ -746,23 +765,58 @@ class Report:
         self.report_sections.append(report)
 
     def cross_segment_OT_report(self):
-        
+
         pass
-    
-    def reporting_algorithm(self):
-        #Check for top issues having data
-        #1 - Cross Segment OT
+
+    def risky_services_categories_chart(self):
+        service_categories = self.assessment.analysis_dataframes["Service Categories"][
+            0
+        ]
+        category_counts = service_categories.groupby("Categories").count()
+        x_axis = category_counts.index
+        y_axis = category_counts["connection_info.unmapped.service_name"].values
+        supporting_data_by_category = {
+            x: service_categories[service_categories["Categories"] == x][
+                "connection_info.unmapped.service_name"
+            ].values
+            for x in x_axis
+        }
+        return x_axis, y_axis, supporting_data_by_category
+
+    # todo exec summary
+
+    def executive_summary(self):
+        # Check for top issues having data
+        # 1 - Cross Segment OT
         report = []
         if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
             # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
-            descr = f"eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. List of Culprits: {self.assessment.analysis_dataframes["num_cross_segment_OT"][1][["src_endpoint.ip"]].value_counts()}"
-            report.append(descr)
-        #2 - OT Remote Access - external into OT
-        #ToDO - Isolate Remote Access Protocols
-        #3 Known outdated services
-        #ToDo - Isolate outdated services
-        
+            descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions."
+            supporting_data = self.assessment.analysis_dataframes[
+                "num_cross_segment_OT"
+            ][1][["src_endpoint.ip"]].value_counts()
+            report.append((descr, supporting_data))
+        # 2 - OT Remote Access - external into OT
+        service_categories = self.assessment.analysis_dataframes["Service Categories"][
+            0
+        ]
+        remote_access = service_categories[
+            service_categories["Categories"] == "Remote Access"
+        ]
 
+        if not remote_access.empty:
+            descr = "Remote access paths into the OT network are detected. Ensure any remote access is 1) intentional, 2) requires access controls (unique passwords, multi-factor authentication)."
+            report.append((descr, remote_access))
+        # 3 Known outdated services
+        legacy_protocols = service_categories[
+            service_categories["Categories"] == "Legacy Protocol"
+        ]
+        if not legacy_protocols.empty:
+            descr = "Outdated and risky services are detected on the uploaded network."
+            report.append((descr, legacy_protocols))
+
+        print("exec summary", report)
+        return report
 
     def OT_and_remote_report(self):
         pass
@@ -773,8 +827,8 @@ class Report:
 
     def generate_report(self):
         self.example_report()
-        self.remote_access_report()
-        self.legacy_protocol_report()
+        # self.remote_access_report()
+        # self.legacy_protocol_report()
 
     def compile_report(self):
         header = "devices "
@@ -806,7 +860,8 @@ if __name__ == "__main__":
     a.create_devices_display()
     a.create_services_display()
     r = Report(a)
-    r.devices_panel()
+    r.risky_services_categories_chart()
+    r.executive_summary()
     # a.create_devices_display()
     # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
