@@ -226,24 +226,28 @@ class Assessor:
         self.known_ics_services = known_services_df[
             (known_services_df["connection_info.unmapped.system_type"] == "ICS")
         ]
-        # Adding risky port descriptions and risk categories to the report
-        known_risky_services_df = pd.DataFrame({})
-        risk_service_match_df = risk_service_match_df[["description", "categories"]]
-        known_risky_services_df = pd.concat(
-            [known_services_df, risk_service_match_df], axis=1
-        )
-        self.known_risky_services_df = known_risky_services_df.rename(
-            columns={"description": "Description", "categories": "Categories"}
-            # Build out df based on categories
-        ).dropna()  # Move this to the display columns list later
-        # Flag Remote Access Category
-        self.service_categories = self.known_risky_services_df.explode("Categories")[
-            [
-                "Categories",
-                "connection_info.unmapped.service_name",
-                "connection_info.port",
+        if "categories" in risk_service_match_df.columns:
+            # Adding risky port descriptions and risk categories to the report
+            known_risky_services_df = pd.DataFrame({})
+            risk_service_match_df = risk_service_match_df[["description", "categories"]]
+            known_risky_services_df = pd.concat(
+                [known_services_df, risk_service_match_df], axis=1
+            )
+            self.known_risky_services_df = known_risky_services_df.rename(
+                columns={"description": "Description", "categories": "Categories"}
+                # Build out df based on categories
+            ).dropna()  # Move this to the display columns list later
+            # Flag Remote Access Category
+            self.service_categories = self.known_risky_services_df.explode(
+                "Categories"
+            )[
+                [
+                    "Categories",
+                    "connection_info.unmapped.service_name",
+                    "connection_info.port",
+                ]
             ]
-        ]
+
         self.analysis_dataframes["Service Categories"] = (
             self.service_categories.sort_values("Categories"),
             "Risky services and their corresponding category",
@@ -451,39 +455,47 @@ class Assessor:
             [ot_services_df, ot_manufactured_comms]
         )
         # Now merge with cross segment
-        cross_segment_OT_services = pd.merge(
-            ot_services_and_manufacturers,
-            self.cross_segment_traffic_display,
-            left_on="id.orig_h",
-            right_on="src_endpoint.ip",
-            how="right",
-        )[
-            [
-                "src_endpoint.ip",
-                "dst_endpoint.ip",
-                "dst_endpoint.port",
-                "connection_info.unmapped.src_subnet",
-                "connection_info.unmapped.dst_subnet",
-            ]
-        ].drop_duplicates()
-        # OT Sources Communicating Across Segments (Rather than number of connections)
-        num_cross_segment_OT_sources = len(
-            cross_segment_OT_services["src_endpoint.ip"].drop_duplicates()
-        )
-        # Num OT Cross Segment Connections
-        num_cross_segment_OT_connections = len(cross_segment_OT_services)
-        self.analysis_dataframes["num_OT_devices"] = (num_ot_devices, OT_device_ips)
-        self.analysis_dataframes["num_cross_segment_OT"] = (
-            num_cross_segment_OT_connections,
-            cross_segment_OT_services,
-        )
-        self.analysis_dataframes["num_cross_segment_OT_sources"] = (
-            num_cross_segment_OT_sources,
-            cross_segment_OT_services,
-        )
-        self.analysis_dataframes["cross_segment_OT_devices_display"] = (
-            self.analysis_dataframes["num_cross_segment_OT"][1]
-        )
+        self.analysis_dataframes["num_OT_devices"] = (
+            num_ot_devices,
+            OT_device_ips,
+        )  # TODO: Need to fix this within the analysis dataframes collection - num_ot_devices is a not a dataframe
+        try:
+            cross_segment_OT_services = pd.merge(
+                ot_services_and_manufacturers,
+                self.cross_segment_traffic_display,
+                left_on="id.orig_h",
+                right_on="src_endpoint.ip",
+                how="right",
+            )[
+                [
+                    "src_endpoint.ip",
+                    "dst_endpoint.ip",
+                    "dst_endpoint.port",
+                    "connection_info.unmapped.src_subnet",
+                    "connection_info.unmapped.dst_subnet",
+                ]
+            ].drop_duplicates()
+            num_cross_segment_OT_connections = len(cross_segment_OT_services)
+
+            num_cross_segment_OT_sources = len(
+                cross_segment_OT_services["src_endpoint.ip"].drop_duplicates()
+            )
+            # Num OT Cross Segment Connections
+            num_cross_segment_OT_connections = len(cross_segment_OT_services)
+            self.analysis_dataframes["num_OT_devices"] = (num_ot_devices, OT_device_ips)
+            self.analysis_dataframes["num_cross_segment_OT"] = (
+                num_cross_segment_OT_connections,
+                cross_segment_OT_services,
+            )
+            self.analysis_dataframes["num_cross_segment_OT_sources"] = (
+                num_cross_segment_OT_sources,
+                cross_segment_OT_services,
+            )
+            self.analysis_dataframes["cross_segment_OT_devices_display"] = (
+                self.analysis_dataframes["num_cross_segment_OT"][1]
+            )
+        except AttributeError:  # There are no instances of cross-subnet OT traffic
+            pass
 
     def check_segmented(self):
         """Collect connections assumed to be communicating cross-segment, while filtering out broadcast addresses.
@@ -602,10 +614,17 @@ class Assessor:
             len(self.known_ics_services),
             self.known_ics_services,
         )
-        self.analysis_dataframes["num_risky_services"] = (
-            len(self.known_risky_services_df),
-            self.known_risky_services_df,
-        )
+        # Calculate the number of known risky services
+        try:
+            self.analysis_dataframes["num_risky_services"] = (
+                len(self.known_risky_services_df),
+                self.known_risky_services_df,
+            )
+        except:  # When there are no known risky services present
+            self.analysis_dataframes["num_risky_services"] = (
+                0,
+                pd.DataFrame({}),
+            )
         # todo - confirm remote services listed here / are high priority
         self.analysis_dataframes["risky_services_display"] = self.analysis_dataframes[
             "num_risky_services"
@@ -739,7 +758,7 @@ class Report:
         return device_metrics
 
     def services_panel(self):
-        print("Services Metrics")
+        # print("Services Metrics")
         service_metrics = [
             ("Number of Services", self.assessment.analysis_dataframes["num_services"]),
             (
@@ -752,7 +771,7 @@ class Report:
             ),
             # self.assessment.analysis_dataframes["risky_services_display"]
         ]
-        print(service_metrics)
+        # print(service_metrics)
         # Note - data passed as tuple to allow for click-in to see data source
         # num services, [0][0]
         # num OT services, [1][0]
@@ -831,7 +850,7 @@ class Report:
             descr = "Outdated and risky services are detected on the uploaded network."
             report.append((descr, legacy_protocols))
 
-        print("exec summary", report)
+        # print("exec summary", report)
         return report
 
     def OT_and_remote_report(self):
@@ -845,11 +864,12 @@ class Report:
         pass
         # self.example_report()
         # self.remote_access_report()
-        # # self.legacy_protocol_report()
+        # # self.legacy_protocol_report(
+        pass
 
     def compile_report(self):
         report = "<h1>eleVADR Report:</h1>"
-        # Executive Report Section
+        # Executive Summary Section
         executive_report = "<h2>Executive Report:</h2>"
         for executive_report_section in self.executive_report_sections:
             executive_report += (
@@ -859,12 +879,15 @@ class Report:
                 + executive_report_section.data.to_html(index=False)
             )
         report += executive_report
+
         # Services Panel
         services_panel = "<h2>Detected Services:</h2>"
         service_metrics = self.services_panel()
         for metric in service_metrics:
+            print(metric)
             services_panel += f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
         report += services_panel
+
         # Devices Panel
         devices_panel = "<h2>Detected Devices:</h2>"
         devices__metrics = self.devices_panel()
