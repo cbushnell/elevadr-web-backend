@@ -217,6 +217,7 @@ class Assessor:
         known_services_df = port_to_service_map[display_cols].sort_values(
             "connection_info.port"
         )
+
         self.known_services_df = known_services_df
 
         # Match known risky ports
@@ -396,7 +397,6 @@ class Assessor:
         # The columns to be recorded in the report
         display_cols = [
             "src_endpoint.ip",
-            "src_endpoint.port",
             "dst_endpoint.ip",
             "dst_endpoint.port",
             "connection_info.protocol_name",
@@ -541,12 +541,14 @@ class Assessor:
         display_cols = ["src_endpoint.ip", "total_dst"]
 
         # Series mapping source IPs with the number of destination IPs they communicate with
-        dsts_per_source = self.conn_df.groupby(by=["id.orig_h"])["id.resp_h"].nunique()
+        dsts_per_source = self.conn_df.groupby(by=["id.orig_h"], observed=False)[
+            "id.resp_h"
+        ].nunique()
 
         # Hosts talking to many internal IPs, indicating either a server or someone enumerating the network
         dsts_per_source_local = (
             self.conn_df[self.conn_df["local_resp"] == "T"]
-            .groupby(by=["id.orig_h"])["id.resp_h"]
+            .groupby(by=["id.orig_h"], observed=False)["id.resp_h"]
             .nunique()
         )
 
@@ -630,19 +632,6 @@ class Assessor:
             "num_risky_services"
         ][1]
 
-    def create_services_bar_chart(self):
-        """returns count of services with high,medium,low and corresponding list of services"""
-        # self.known_risky_services_df is red
-        # self.known_ics_services is yellow
-        # any remote services should be tagged yellow/red
-        # everything else is green
-        medium_risk_services = []
-        services_bar_chart = {
-            "red": (len(self.known_risky_services_df), self.known_risky_services_df),
-            "yellow": (0, []),
-            "green": (len(self.known_services_df), self.known_services_df),
-        }
-
     def get_unique_devices(self):
         unique_devices = pd.concat(
             [
@@ -723,6 +712,8 @@ class ReportSection:
 class Report:
     """Use information from the assessments to generate an actionable report"""
 
+    report = {}
+
     def __init__(self, assessment: Assessor):
         """Establish relative paths, load required data from analysis, and establish storage structures"""
         self.assessment = assessment
@@ -741,54 +732,44 @@ class Report:
         # num OT devices, [1][0]
         # num cross segment OT, [2][0]
         # display of cross segment OT, [2][1]
-        device_metrics = [
-            ("Hosts", self.assessment.analysis_dataframes["num_devices"]),
-            (
-                "OT Hosts",
-                self.assessment.analysis_dataframes["num_OT_devices"],
-            ),
-            (
-                "OT Cross Segment connection",
-                self.assessment.analysis_dataframes["num_cross_segment_OT"],
-            ),
-            # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
-        ]
+        device_metrics = {
+            "hosts": self.assessment.analysis_dataframes["num_devices"],
+            "ot_hosts": self.assessment.analysis_dataframes["num_OT_devices"],
+            "ot_cross_segment_conn": self.assessment.analysis_dataframes[
+                "num_cross_segment_OT"
+            ],
+        }
+
+        # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
+
+        self.report["device_metrics"] = device_metrics
         print(device_metrics)
 
         return device_metrics
 
     def services_panel(self):
         # print("Services Metrics")
-        service_metrics = [
-            ("Number of Services", self.assessment.analysis_dataframes["num_services"]),
-            (
-                "Number of OT Services",
-                self.assessment.analysis_dataframes["num_OT_services"],
-            ),
-            (
-                "Number of Risky Services",
-                self.assessment.analysis_dataframes["num_risky_services"],
-            ),
-            # self.assessment.analysis_dataframes["risky_services_display"]
-        ]
+        service_metrics = {
+            "services": self.assessment.analysis_dataframes["num_services"],
+            "ot_services": self.assessment.analysis_dataframes["num_OT_services"],
+            "risky_services": self.assessment.analysis_dataframes["num_risky_services"],
+        }
+        self.report["service_metrics"] = service_metrics
         # print(service_metrics)
         # Note - data passed as tuple to allow for click-in to see data source
         # num services, [0][0]
         # num OT services, [1][0]
         # num risky services, [2][0]
         # display of risky services, [2][1]
-        return service_metrics
+        # return service_metrics
 
-    def top_level_actions(self):
-        pass
-
-    def example_report(self):
-        report = ReportSection(name="Example Report")
-        report.risk = "Low"
-        report.info = "Not too much to say about this one, honestly"
-        report.exec = "Execute this example action."
-        report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
-        self.executive_report_sections.append(report)
+    # def example_report(self):
+    #     report = ReportSection(name="Example Report")
+    #     report.risk = "Low"
+    #     report.info = "Not too much to say about this one, honestly"
+    #     report.exec = "Execute this example action."
+    #     report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
+    #     self.executive_report_sections.append(report)
 
     # def remote_access_report(self):
     #     report = ReportSection(name="Network - Remote Access:")
@@ -798,10 +779,6 @@ class Report:
     #     df = self.assessment.analysis_dataframes["Known Services"][0]
     #     report.data = df
     #     self.executive_report_sections.append(report)
-
-    def cross_segment_OT_report(self):
-
-        pass
 
     def risky_services_categories_chart(self):
         service_categories = self.assessment.analysis_dataframes["Service Categories"][
@@ -816,6 +793,11 @@ class Report:
             ].values
             for x in x_axis
         }
+        self.report["risky_services_bar_chart"] = {
+            "x_axis": x_axis,
+            "y_axis": y_axis,
+            "supporting_data": supporting_data_by_category,
+        }
         return x_axis, y_axis, supporting_data_by_category
 
     # todo exec summary
@@ -823,14 +805,17 @@ class Report:
     def executive_summary(self):
         # Check for top issues having data
         # 1 - Cross Segment OT
-        report = []
+        self.report["executive_summary"] = {}
         if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
             # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
             descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions."
             supporting_data = self.assessment.analysis_dataframes[
                 "num_cross_segment_OT"
             ][1][["src_endpoint.ip"]].value_counts()
-            report.append((descr, supporting_data))
+            self.report["executive_summary"]["cross_segment_OT"] = {
+                "description": descr,
+                "supporting_data": supporting_data,
+            }
         # 2 - OT Remote Access - external into OT
         service_categories = self.assessment.analysis_dataframes["Service Categories"][
             0
@@ -841,20 +826,48 @@ class Report:
 
         if not remote_access.empty:
             descr = "Remote access paths into the OT network are detected. Ensure any remote access is 1) intentional, 2) requires access controls (unique passwords, multi-factor authentication)."
-            report.append((descr, remote_access))
+            self.report["executive_summary"]["remote_access"] = {
+                "description": descr,
+                "supporting_data": remote_access,
+            }
         # 3 Known outdated services
         legacy_protocols = service_categories[
             service_categories["Categories"] == "Legacy Protocol"
         ]
         if not legacy_protocols.empty:
-            descr = "Outdated and risky services are detected on the uploaded network."
-            report.append((descr, legacy_protocols))
+            descr = "Outdated and risky services are detected on the uploaded network. Check if existing equipment supports a secure version of the service to prevent man-in-the-middle or data manipulation attacks."
+            self.report["executive_summary"]["legacy_protocols"] = {
+                "description": descr,
+                "supporting_data": legacy_protocols,
+            }
 
-        # print("exec summary", report)
-        return report
+    def service_counts_display(self):
+        # get percentage of services in conn.log
+        self.report["service_pie_chart"] = (
+            self.conn_df["id.resp_p"].value_counts(normalize=True) * 100
+        )
 
-    def OT_and_remote_report(self):
-        pass
+    def architectural_insights(self):
+        # connectivity
+        self.report["architectural_insights"] = {}
+        self.report["architectural_insights"].update(self.add_connectivity_tables())
+        # self.report["architectural_insights"].update(self.add_protocol_breakdown())
+
+    def add_connectivity_tables(self):
+        temp_dict = {}
+        temp_dict["high_connectivity"] = self.assessment.analysis_dataframes[
+            "Communication to Local Hosts"
+        ]
+        temp_dict["high_external"] = self.assessment.analysis_dataframes[
+            "Communication to External Hosts"
+        ]
+        return temp_dict
+
+    def add_protocol_breakdown(self):
+        ot_protocols = None
+        ot_manufacturers = None
+        remote_access = None
+        return {}
 
     def generate_deliverables(self):
         # Given our conn.log, create an allowlist for OT components.
@@ -907,16 +920,21 @@ if __name__ == "__main__":
     )
     a.get_date_range()
     a.check_ports()
-    # a.identify_chatty_systems()
+    a.identify_chatty_systems()
     a.ics_manufacturer_col()
     a.check_external()
-    # a.create_allowlist()
+    a.create_allowlist()
     a.check_segmented()
     a.create_devices_display()
     a.create_services_display()
     r = Report(a)
-    r.risky_services_categories_chart()
+
     r.executive_summary()
+    r.devices_panel()
+    r.services_panel()
+    r.risky_services_categories_chart()
+    r.service_counts_display()
+    r.architectural_insights()
     # a.create_devices_display()
     # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
