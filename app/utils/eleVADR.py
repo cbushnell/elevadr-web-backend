@@ -563,7 +563,7 @@ class Assessor:
         """Count the number of inbound and outbound connections for each host"""
 
         # Description of the results and how they should be interpreted
-        description_conn_local = "A large number of local connections typically indicates a server. Ensure talkative systems are servers and not adversaries enumerating the network."
+        description_conn_local = "A large number of local connections typically indicates a server. Ensure talkative systems are servers and not adversaries enumerating the network. Only devices with more than 1 local connection are displayed."
         description_conn_external = "External connection can indicate malware command and control, data exfiltration. Verify that these external connections are intended."
 
         # Mappings from base field/column names to the desired names of the columns for the report
@@ -602,10 +602,11 @@ class Assessor:
             .sort_values(by="total_dst", ascending=False)
         )
 
-        # Drop hosts with no listed communications
+        # Drop hosts with 1 or fewer listed internal communications
         dsts_per_source_local_df = dsts_per_source_local_df[
-            dsts_per_source_local_df["total_dst"] != 0
+            dsts_per_source_local_df["total_dst"] > 1
         ]
+        # Drop hosts with no listed external communication
         external_contact_counts_df = external_contact_counts_df[
             external_contact_counts_df["total_dst"] != 0
         ]
@@ -614,11 +615,9 @@ class Assessor:
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
             description_conn_local,
-            description_conn_local,
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
-            description_conn_external,
             description_conn_external,
         )
 
