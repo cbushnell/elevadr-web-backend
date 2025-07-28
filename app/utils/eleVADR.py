@@ -45,7 +45,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        self.zeekify()
+        # self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -245,7 +245,7 @@ class Assessor:
             ]
         ]
         self.analysis_dataframes["Service Categories"] = (
-            self.service_categories,
+            self.service_categories.sort_values("Categories"),
             "Risky services and their corresponding category",
         )
         # Assign dataframe to the collection of final reports
@@ -280,15 +280,10 @@ class Assessor:
         # The columns to be recorded in the report
         display_cols = [
             "src_endpoint.ip",
-            "src_endpoint.port",
             "dst_endpoint.ip",
             "dst_endpoint.port",
             "connection_info.protocol_name",
             "network_activity.category",
-            "traffic.packets_out",
-            "traffic.bytes_out",
-            "traffic.packets_in",
-            "traffic.bytes_in",
         ]
 
         # Connections from internal to external addresses
@@ -309,9 +304,9 @@ class Assessor:
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
         ] = (
-            problematic_internals.rename(columns=display_cols_conversion)[
-                display_cols
-            ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            problematic_internals.rename(columns=display_cols_conversion)[display_cols]
+            .drop_duplicates()
+            .sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_int_to_ext,
         )
 
@@ -319,9 +314,9 @@ class Assessor:
         self.analysis_dataframes[
             "Suspicious Connections from External to Internal Sources"
         ] = (
-            problematic_externals.rename(columns=display_cols_conversion)[
-                display_cols
-            ].sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            problematic_externals.rename(columns=display_cols_conversion)[display_cols]
+            .drop_duplicates()
+            .sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
             description_ext_to_int,
         )
 
@@ -421,10 +416,12 @@ class Assessor:
                 description,
             )
 
-    def create_devices_display(self): 
+    def create_devices_display(self):
         # Known OT Manufacturer + Known OT Service
         # IPs using observed OT services
-        self.analysis_dataframes["num_devices"] = self.get_unique_devices() # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
+        self.analysis_dataframes["num_devices"] = (
+            self.get_unique_devices()
+        )  # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
         ot_services_df = pd.merge(
             self.conn_df[
                 [
@@ -469,10 +466,19 @@ class Assessor:
                 "connection_info.unmapped.dst_subnet",
             ]
         ].drop_duplicates()
+        # OT Sources Communicating Across Segments (Rather than number of connections)
+        num_cross_segment_OT_sources = len(
+            cross_segment_OT_services["src_endpoint.ip"].drop_duplicates()
+        )
+        # Num OT Cross Segment Connections
         num_cross_segment_OT_connections = len(cross_segment_OT_services)
         self.analysis_dataframes["num_OT_devices"] = (num_ot_devices, OT_device_ips)
         self.analysis_dataframes["num_cross_segment_OT"] = (
             num_cross_segment_OT_connections,
+            cross_segment_OT_services,
+        )
+        self.analysis_dataframes["num_cross_segment_OT_sources"] = (
+            num_cross_segment_OT_sources,
             cross_segment_OT_services,
         )
         self.analysis_dataframes["cross_segment_OT_devices_display"] = (
@@ -583,7 +589,9 @@ class Assessor:
                 str(Path(self.upload_output_zeek_dir, df_name + ".json", indent=4))
             )
 
-    def create_services_display(self): # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
+    def create_services_display(
+        self,
+    ):  # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
         self.analysis_dataframes["num_services"] = (
             len(
                 self.known_services_df["connection_info.unmapped.service_name"].unique()
@@ -667,7 +675,7 @@ class Assessor:
             # Display the rest of the data
             data_html = "<h1>Analysis Data:</h1>"
             for df_name in self.analysis_dataframes.keys():
-                try: # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
+                try:  # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
                     if len(self.analysis_dataframes[df_name][0]) > 0:
                         data_html += (
                             f"<h2>{df_name}:</h2>"
@@ -709,25 +717,25 @@ class Report:
 
     def devices_panel(self):
         # Num Devices
-        print("Host Metrics")
-        device_metrics = [
-            ("Number of Hosts", self.assessment.analysis_dataframes["num_devices"]),
-            (
-                "Number of OT Hosts",
-                self.assessment.analysis_dataframes["num_OT_devices"],
-            ),
-            (
-                "Number of OT Hosts Communicating Across Segments",
-                self.assessment.analysis_dataframes["num_cross_segment_OT"],
-            ),
-            # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
-        ]
-        print(device_metrics)
         # Note - data passed as tuple to allow for click-in to see data source
         # num devices, [0][0]
         # num OT devices, [1][0]
         # num cross segment OT, [2][0]
         # display of cross segment OT, [2][1]
+        device_metrics = [
+            ("Hosts", self.assessment.analysis_dataframes["num_devices"]),
+            (
+                "OT Hosts",
+                self.assessment.analysis_dataframes["num_OT_devices"],
+            ),
+            (
+                "OT Cross Segment connection",
+                self.assessment.analysis_dataframes["num_cross_segment_OT"],
+            ),
+            # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
+        ]
+        print(device_metrics)
+
         return device_metrics
 
     def services_panel(self):
@@ -763,14 +771,14 @@ class Report:
         report.data = pd.DataFrame({"Something": [1, 2], "Like This": [3, 4]})
         self.executive_report_sections.append(report)
 
-    def remote_access_report(self):
-        report = ReportSection(name="Network - Remote Access:")
-        report.risk = "High"
-        report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
-        report.exec = "Verify observed remote access paths are 1) known, and 2) use unique accounts with strong passwords"
-        df = self.assessment.analysis_dataframes["Known Services"][0]
-        report.data = df
-        self.executive_report_sections.append(report)
+    # def remote_access_report(self):
+    #     report = ReportSection(name="Network - Remote Access:")
+    #     report.risk = "High"
+    #     report.info = "Compromised remote access can lead to direct control of systems, data exfiltration, lateral movement, and disruption of operations. The descriptions often mention brute-force, weak credentials, or exploiting vulnerabilities for remote code execution."
+    #     report.exec = "Verify observed remote access paths are 1) known, and 2) use unique accounts with strong passwords"
+    #     df = self.assessment.analysis_dataframes["Known Services"][0]
+    #     report.data = df
+    #     self.executive_report_sections.append(report)
 
     def cross_segment_OT_report(self):
 
@@ -834,6 +842,7 @@ class Report:
         pass
 
     def generate_report(self):
+        pass
         # self.example_report()
         # self.remote_access_report()
         # # self.legacy_protocol_report()
@@ -854,17 +863,13 @@ class Report:
         services_panel = "<h2>Detected Services:</h2>"
         service_metrics = self.services_panel()
         for metric in service_metrics:
-            services_panel += (
-                f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
-            )
+            services_panel += f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
         report += services_panel
         # Devices Panel
         devices_panel = "<h2>Detected Devices:</h2>"
         devices__metrics = self.devices_panel()
         for metric in devices__metrics:
-            devices_panel += (
-                f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
-            )
+            devices_panel += f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
         report += devices_panel
         return report
 
@@ -872,7 +877,7 @@ class Report:
 if __name__ == "__main__":
 
     a = Assessor(
-        "data/Module_7_IR_Lab_1.pcap",
+        "data/CR2_18.pcap",
         "app/zeeks",
         "zeek_scripts",
         "app/data/assessor_data",
@@ -881,6 +886,7 @@ if __name__ == "__main__":
     a.check_ports()
     # a.identify_chatty_systems()
     a.ics_manufacturer_col()
+    a.check_external()
     # a.create_allowlist()
     a.check_segmented()
     a.create_devices_display()
