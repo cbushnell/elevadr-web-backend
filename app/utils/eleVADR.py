@@ -45,7 +45,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        self.zeekify()
+        # self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -92,6 +92,13 @@ class Assessor:
         # Description of the results and how they should be interpreted
         description = "Inventory of device manufacturers."
 
+        display_cols = [
+            "device.ip.4",
+            "device.ip.6",
+            "device.vendor_name",
+            "device.display_mac"
+        ]
+
         # Load OUI information
         manufacturer_series = self.conn_df.apply(
             lambda row: get_list_of_manufacturers(
@@ -107,23 +114,51 @@ class Assessor:
         matched_manufacturers_df = self.conn_df[
             ~self.conn_df["ICS_manufacturer"].isnull()
         ]
-        matched_manufacturers_df = matched_manufacturers_df.rename(
+
+        # Devices may have both an IPv4 and IPv6 address - account for this by separating out different dataframes and recombining
+        matched_manufacturers_df_ipv4 = matched_manufacturers_df[matched_manufacturers_df['connection_info.protocol_ver'] == 4]
+        matched_manufacturers_df_ipv4 = matched_manufacturers_df_ipv4.rename(
+            columns={
+                "id.orig_h": "device.ip.4",
+                "orig_l2_addr": "device.mac",
+                "ICS_manufacturer": "device.vendor_name",
+            }
+        )[["device.ip.4", "device.mac", "device.vendor_name"]]
+        matched_manufacturers_df_ipv4 = matched_manufacturers_df_ipv4.drop_duplicates("device.ip.4")  
+                                                                       
+        matched_manufacturers_df_ipv6 = matched_manufacturers_df[matched_manufacturers_df['connection_info.protocol_ver'] == 6]
+        matched_manufacturers_df_ipv6 = matched_manufacturers_df_ipv6.rename(
+            columns={
+                "id.orig_h": "device.ip.6",
+                "orig_l2_addr": "device.mac",
+                "ICS_manufacturer": "device.vendor_name",
+            }
+        )[["device.ip.6", "device.mac", "device.vendor_name"]]
+        matched_manufacturers_df_ipv6 = matched_manufacturers_df_ipv6.drop_duplicates("device.ip.6")                                                                 
+
+        # Combine ipv4 and ipv6 dataframes
+        matched_manufacturers_df_ipv6 = matched_manufacturers_df_ipv6.set_index("device.mac")
+        matched_manufacturers_df_ipv4 = matched_manufacturers_df_ipv4.set_index("device.mac")
+
+        matched_manufacturers_df_combined = matched_manufacturers_df_ipv6.merge(matched_manufacturers_df_ipv4, left_on="device.mac", right_on="device.mac", how="outer")
+        matched_manufacturers_df_combined["device.vendor_name"] = matched_manufacturers_df_combined["device.vendor_name_x"].fillna(matched_manufacturers_df_combined["device.vendor_name_y"])
+        # Create a new column to display the mac address, since it is now the index, which we don't display for any dataframes
+        matched_manufacturers_df_combined["device.display_mac"] = matched_manufacturers_df_combined.index
+
+        # Submit completed analysis to the collection of reports
+        self.analysis_dataframes["Manufacturers"] = (
+            matched_manufacturers_df_combined[display_cols],
+            description,
+        )
+
+        # Tracking ICS manufacturers to tie into other analysis
+        self.matched_manufacturers_df = matched_manufacturers_df.rename(
             columns={
                 "id.orig_h": "device.ip",
                 "orig_l2_addr": "device.mac",
                 "ICS_manufacturer": "device.vendor_name",
             }
-        )[["device.ip", "device.mac", "device.vendor_name"]]
-        matched_manufacturers_df = matched_manufacturers_df.drop_duplicates("device.ip")
-
-        # Submit completed analysis to the collection of reports
-        self.analysis_dataframes["Manufacturers"] = (
-            matched_manufacturers_df,
-            description,
         )
-
-        # Tracking ICS manufacturers to tie into other analysis
-        self.matched_manufacturers_df = matched_manufacturers_df
 
     def zeekify(self):
         """Execute pcap analysis using Zeek"""
@@ -872,7 +907,7 @@ class Report:
         services_panel = "<h2>Detected Services:</h2>"
         service_metrics = self.services_panel()
         for metric in service_metrics:
-            print(metric)
+            # print(metric)
             services_panel += (
                 f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
             )
@@ -897,17 +932,17 @@ if __name__ == "__main__":
         "zeek_scripts",
         "app/data/assessor_data",
     )
-    a.get_date_range()
-    a.check_ports()
+    # a.get_date_range()
+    # a.check_ports()
     # a.identify_chatty_systems()
-    a.ics_manufacturer_col()
+    # a.ics_manufacturer_col()
     # a.create_allowlist()
-    a.check_segmented()
-    a.create_devices_display()
-    a.create_services_display()
+    # a.check_segmented()
+    # a.create_devices_display()
+    # a.create_services_display()
     r = Report(a)
-    r.risky_services_categories_chart()
-    r.executive_summary()
+    # r.risky_services_categories_chart()
+    # r.executive_summary()
     # a.create_devices_display()
     # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
