@@ -606,9 +606,14 @@ class Assessor:
         dsts_per_source_local_df = dsts_per_source_local_df[
             dsts_per_source_local_df["total_dst"] > 1
         ]
+
         # Drop hosts with no listed external communication
         external_contact_counts_df = external_contact_counts_df[
             external_contact_counts_df["total_dst"] != 0
+        ]
+        # Drop link-local IPv6 connections, since they can't be external
+        external_contact_counts_df = external_contact_counts_df[
+            ~external_contact_counts_df["src_endpoint.ip"].str.contains("fe80")
         ]
 
         # Add results to the final report collection
