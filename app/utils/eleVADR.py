@@ -784,7 +784,6 @@ class Report:
         self.executive_report_sections = []
 
     def services_metrics(self):
-
         pass
 
     def devices_panel(self):
@@ -932,43 +931,55 @@ class Report:
         return {}
 
     def generate_deliverables(self):
-        # Given our conn.log, create an allowlist for OT components.
         pass
 
     def generate_report(self):
-        pass
-        # self.example_report()
-        # self.remote_access_report()
-        # # self.legacy_protocol_report(
-        pass
+        self.executive_summary()
+        self.devices_panel()
+        self.services_panel()
+        self.risky_services_categories_chart()
+        self.architectural_insights()
 
     def compile_report(self):
         report = "<h1>eleVADR Report:</h1>"
         # Executive Summary Section
+        # executive_report = "<h2>Executive Report:</h2>"
+        # for executive_report_section in self.executive_report_sections:
+        #     executive_report += (
+        #         f"<h3>{executive_report_section.name}:</h3>"
+        #         + f"<h4>Risk:{executive_report_section.risk}</h4>"
+        #         + f"<p>{executive_report_section.info}</p>"
+        #         + executive_report_section.data.to_html(index=False)
+        #     )
+        # report += executive_report
+
+        # Executive Summary
         executive_report = "<h2>Executive Report:</h2>"
-        for executive_report_section in self.executive_report_sections:
-            executive_report += (
-                f"<h3>{executive_report_section.name}:</h3>"
-                + f"<h4>Risk:{executive_report_section.risk}</h4>"
-                + f"<p>{executive_report_section.info}</p>"
-                + executive_report_section.data.to_html(index=False)
-            )
+        executive_report += "<h3>cross_segment_OT:</h3>"
+        executive_report += f"<p>{self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
+        executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
         report += executive_report
 
         # Services Panel
         services_panel = "<h2>Detected Services:</h2>"
-        service_metrics = self.services_panel()
-        for metric in service_metrics:
-            print(metric)
-            services_panel += f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
+        for metric, data in self.report['service_metrics'].items():
+            services_panel += f"<h3>{metric}:</h3>{data[0]}"
         report += services_panel
 
         # Devices Panel
         devices_panel = "<h2>Detected Devices:</h2>"
-        devices__metrics = self.devices_panel()
-        for metric in devices__metrics:
-            devices_panel += f"<h3>{metric[0]}:</h3><p>{metric[1][0]}<p>"
+        for metric, data in self.report['device_metrics'].items():
+            devices_panel += f"<h3>{metric}:</h3>{data[0]}"
         report += devices_panel
+
+        # Risky Services
+        risky_services_panel = "<h2>Risky Services Bar Chart:</h2>"
+        data = self.report["risky_services_bar_chart"]
+        risky_services_panel += f"<h3>x_axis:</h3>{data["x_axis"]}"
+        risky_services_panel += f"<h3>y_axis:</h3>{data["y_axis"]}"
+        risky_services_panel += f"<h3>risky_services_panel:</h3>{data["supporting_data"]}"
+        report += risky_services_panel
+
         return report
 
 
