@@ -6,6 +6,8 @@ import ipaddress
 import json
 import yaml
 import os
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
@@ -875,18 +877,19 @@ class Report:
             descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. Verify that 1) the automated tool's guess at subnets are reasonable and 2) any cross subnet communication is intentional"
             supporting_data = self.assessment.analysis_dataframes[
                 "num_cross_segment_OT"
-            ][1][
+            ][1].groupby(
                 [
                     "connection_info.unmapped.src_subnet",
                     "connection_info.unmapped.dst_subnet",
                 ]
-            ].value_counts()
-            # supporting_data = self.assessment.analysis_dataframes[
-            # "num_cross_segment_OT"
-            # ][1][["src_endpoint.ip"]].value_counts()
+            ).size()
+            # supporting_data_sorted = supporting_data.sort_values(ascending=False).reset_index(name="count")
+            supporting_data_grouped = supporting_data.groupby("connection_info.unmapped.src_subnet", group_keys=False)
+            supporting_data_sorted = supporting_data_grouped.apply(lambda x: x.sort_values(ascending=False))
+            supporting_data_sorted_df = supporting_data_sorted.to_frame("count")
             self.report["executive_summary"]["cross_segment_OT"] = {
                 "description": descr,
-                "supporting_data": supporting_data,
+                "supporting_data": supporting_data_sorted_df,
             }
         # 2 - OT Remote Access - external into OT
         service_categories = self.assessment.analysis_dataframes["Service Categories"][
@@ -995,7 +998,6 @@ class Report:
         executive_report += self.hide_details(
             "exec_cross_segment_ot",
             self.report["executive_summary"]["cross_segment_OT"]["supporting_data"]
-            .to_frame()
             .to_html(),
             additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
         )
