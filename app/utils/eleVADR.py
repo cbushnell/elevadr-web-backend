@@ -111,8 +111,9 @@ class Assessor:
             ),
             axis=1,
         )
-        self.conn_df["ICS_manufacturer"] = manufacturer_series
 
+        self.conn_df["ICS_manufacturer"] = manufacturer_series
+        # self.conn_df["ICS_manufacturer"] = self.conn_df[self.conn_df["manufacturer"].isin(self.ics_manufacturers)]
         # Get rows where ICS Manufacturer is identified as source
         matched_manufacturers_df = self.conn_df[
             ~self.conn_df["ICS_manufacturer"].isnull()
@@ -476,10 +477,10 @@ class Assessor:
                 columns=display_cols_conversion
             )
             self.cross_segment_traffic_display = cross_segment_traffic[display_cols]
-            self.analysis_dataframes["Cross Segment Communication"] = (
-                self.cross_segment_traffic_display.drop_duplicates(),
-                description,
-            )
+            # self.analysis_dataframes["Cross Segment Communication"] = (
+            #     self.cross_segment_traffic_display.drop_duplicates(),
+            #     description,
+            # )
 
     def create_devices_display(self):
         # Known OT Manufacturer + Known OT Service
@@ -612,6 +613,13 @@ class Assessor:
             .groupby(by=["id.orig_h"], observed=False)["id.resp_h"]
             .nunique()
         )
+        support_data = (
+            self.conn_df[(self.conn_df["local_resp"] == "T")][
+                ["id.orig_h", "id.resp_h"]
+            ]
+            .drop_duplicates()
+            .sort_values("id.orig_h")
+        )
 
         # Represents hosts that are communicating with many external IPs, potentially representing C2
         external_contact_counts = dsts_per_source - dsts_per_source_local
@@ -632,7 +640,7 @@ class Assessor:
 
         # Drop hosts with 1 or fewer listed internal communications
         dsts_per_source_local_df = dsts_per_source_local_df[
-            dsts_per_source_local_df["total_dst"] > 1
+            dsts_per_source_local_df["total_dst"] > 10
         ]
 
         # Drop hosts with no listed external communication
@@ -648,6 +656,7 @@ class Assessor:
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
             description_conn_local,
+            support_data,
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
@@ -755,11 +764,24 @@ class Assessor:
                             + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
                             + self.analysis_dataframes[df_name][0].to_html(index=False)
                         )
+                        print(df_name, len(self.analysis_dataframes[df_name]))
+                        if len(self.analysis_dataframes[df_name]) > 2:
+                            try:
+                                hidden_html = report.hide_details(
+                                    df_name,
+                                    self.analysis_dataframes[df_name][2].to_html(
+                                        index=False
+                                    ),
+                                )
+                                data_html += hidden_html
+                            except Exception as e2:
+                                print(e2)
                     else:
                         data_html += (
                             f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
                         )
-                except:
+                except Exception as e1:
+                    print(e1)
                     continue
             return report_html + data_html
         return ""
