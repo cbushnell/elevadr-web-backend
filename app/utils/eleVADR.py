@@ -6,6 +6,9 @@ import ipaddress
 import json
 import yaml
 import os
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
@@ -754,37 +757,33 @@ class Assessor:
             report.generate_report()
             report_html = report.compile_report()
             report_html += "<hr>"
-            # Display the rest of the data
-            data_html = "<h1>Analysis Data:</h1>"
-            for df_name in self.analysis_dataframes.keys():
-                try:  # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
-                    if len(self.analysis_dataframes[df_name][0]) > 0:
-                        data_html += (
-                            f"<h2>{df_name}:</h2>"
-                            + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
-                            + self.analysis_dataframes[df_name][0].to_html(index=False)
-                        )
-                        print(df_name, len(self.analysis_dataframes[df_name]))
-                        if len(self.analysis_dataframes[df_name]) > 2:
-                            try:
-                                hidden_html = report.hide_details(
-                                    df_name,
-                                    self.analysis_dataframes[df_name][2].to_html(
-                                        index=False
-                                    ),
-                                )
-                                data_html += hidden_html
-                            except Exception as e2:
-                                print(e2)
-                    else:
-                        data_html += (
-                            f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
-                        )
-                except Exception as e1:
-                    print(e1)
-                    continue
-            return report_html + data_html
+            return report_html
         return ""
+
+    def generate_analysis_page(self):
+        # Display the rest of the data
+        data_html = "<h1>Analysis Data:</h1>"
+        for df_name in self.analysis_dataframes.keys():
+            try:  # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
+                if len(self.analysis_dataframes[df_name][0]) > 0:
+                    data_html += (
+                        f"<h2>{df_name}:</h2>"
+                        + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
+                        + self.analysis_dataframes[df_name][0].to_html(index=False)
+                    )
+                    if len(self.analysis_dataframes[df_name]) > 2:
+                        hidden_html = report.hide_details(
+                            df_name,
+                            self.analysis_dataframes[df_name][2].to_html(index=False),
+                        )
+                        data_html += hidden_html
+                else:
+                    data_html += (
+                        f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
+                    )
+            except:
+                continue
+        return data_html
 
 
 @dataclass
@@ -895,20 +894,27 @@ class Report:
         if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
             # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
             descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. Verify that 1) the automated tool's guess at subnets are reasonable and 2) any cross subnet communication is intentional"
-            supporting_data = self.assessment.analysis_dataframes[
-                "num_cross_segment_OT"
-            ][1][
-                [
-                    "connection_info.unmapped.src_subnet",
-                    "connection_info.unmapped.dst_subnet",
-                ]
-            ].value_counts()
-            # supporting_data = self.assessment.analysis_dataframes[
-            # "num_cross_segment_OT"
-            # ][1][["src_endpoint.ip"]].value_counts()
+            supporting_data = (
+                self.assessment.analysis_dataframes["num_cross_segment_OT"][1]
+                .groupby(
+                    [
+                        "connection_info.unmapped.src_subnet",
+                        "connection_info.unmapped.dst_subnet",
+                    ]
+                )
+                .size()
+            )
+            # supporting_data_sorted = supporting_data.sort_values(ascending=False).reset_index(name="count")
+            supporting_data_grouped = supporting_data.groupby(
+                "connection_info.unmapped.src_subnet", group_keys=False
+            )
+            supporting_data_sorted = supporting_data_grouped.apply(
+                lambda x: x.sort_values(ascending=False)
+            )
+            supporting_data_sorted_df = supporting_data_sorted.to_frame("count")
             self.report["executive_summary"]["cross_segment_OT"] = {
                 "description": descr,
-                "supporting_data": supporting_data,
+                "supporting_data": supporting_data_sorted_df,
             }
         # 2 - OT Remote Access - external into OT
         service_categories = self.assessment.analysis_dataframes["Service Categories"][
@@ -1016,9 +1022,9 @@ class Report:
         executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
         executive_report += self.hide_details(
             "exec_cross_segment_ot",
-            self.report["executive_summary"]["cross_segment_OT"]["supporting_data"]
-            .to_frame()
-            .to_html(),
+            self.report["executive_summary"]["cross_segment_OT"][
+                "supporting_data"
+            ].to_html(),
             additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
         )
         # executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
@@ -1056,8 +1062,8 @@ class Report:
         data = self.report["risky_services_bar_chart"]
         plt.style.use("seaborn-v0_8-dark")
         plt.barh(data["x_axis"], data["y_axis"], height=0.1)
-        plt.xlabel("Category")
-        plt.ylabel("Count")
+        plt.xlabel("Count")
+        plt.ylabel("Category")
         plt.title("Risky Services by Category")
         tmpfile = BytesIO()
         plt.savefig(tmpfile, bbox_inches="tight", format="png")
@@ -1080,6 +1086,9 @@ class Report:
         html = f"<img src='data:image/png;base64,{encoded}'>"
         services_pie_panel += html
         report += services_pie_panel
+
+        # Analysis link
+
         return report
 
 
