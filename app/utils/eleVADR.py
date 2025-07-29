@@ -7,7 +7,8 @@ import json
 import yaml
 import os
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
@@ -113,8 +114,9 @@ class Assessor:
             ),
             axis=1,
         )
-        self.conn_df["ICS_manufacturer"] = manufacturer_series
 
+        self.conn_df["ICS_manufacturer"] = manufacturer_series
+        # self.conn_df["ICS_manufacturer"] = self.conn_df[self.conn_df["manufacturer"].isin(self.ics_manufacturers)]
         # Get rows where ICS Manufacturer is identified as source
         matched_manufacturers_df = self.conn_df[
             ~self.conn_df["ICS_manufacturer"].isnull()
@@ -478,10 +480,10 @@ class Assessor:
                 columns=display_cols_conversion
             )
             self.cross_segment_traffic_display = cross_segment_traffic[display_cols]
-            self.analysis_dataframes["Cross Segment Communication"] = (
-                self.cross_segment_traffic_display.drop_duplicates(),
-                description,
-            )
+            # self.analysis_dataframes["Cross Segment Communication"] = (
+            #     self.cross_segment_traffic_display.drop_duplicates(),
+            #     description,
+            # )
 
     def create_devices_display(self):
         # Known OT Manufacturer + Known OT Service
@@ -614,6 +616,13 @@ class Assessor:
             .groupby(by=["id.orig_h"], observed=False)["id.resp_h"]
             .nunique()
         )
+        support_data = (
+            self.conn_df[(self.conn_df["local_resp"] == "T")][
+                ["id.orig_h", "id.resp_h"]
+            ]
+            .drop_duplicates()
+            .sort_values("id.orig_h")
+        )
 
         # Represents hosts that are communicating with many external IPs, potentially representing C2
         external_contact_counts = dsts_per_source - dsts_per_source_local
@@ -634,7 +643,7 @@ class Assessor:
 
         # Drop hosts with 1 or fewer listed internal communications
         dsts_per_source_local_df = dsts_per_source_local_df[
-            dsts_per_source_local_df["total_dst"] > 1
+            dsts_per_source_local_df["total_dst"] > 10
         ]
 
         # Drop hosts with no listed external communication
@@ -650,6 +659,7 @@ class Assessor:
         self.analysis_dataframes["Communication to Local Hosts"] = (
             pd.DataFrame(dsts_per_source_local_df),
             description_conn_local,
+            support_data,
         )
         self.analysis_dataframes["Communication to External Hosts"] = (
             pd.DataFrame(external_contact_counts_df),
@@ -749,7 +759,7 @@ class Assessor:
             report_html += "<hr>"
             return report_html
         return ""
-    
+
     def generate_analysis_page(self):
         # Display the rest of the data
         data_html = "<h1>Analysis Data:</h1>"
@@ -761,6 +771,12 @@ class Assessor:
                         + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
                         + self.analysis_dataframes[df_name][0].to_html(index=False)
                     )
+                    if len(self.analysis_dataframes[df_name]) > 2:
+                        hidden_html = report.hide_details(
+                            df_name,
+                            self.analysis_dataframes[df_name][2].to_html(index=False),
+                        )
+                        data_html += hidden_html
                 else:
                     data_html += (
                         f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
@@ -878,17 +894,23 @@ class Report:
         if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
             # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
             descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. Verify that 1) the automated tool's guess at subnets are reasonable and 2) any cross subnet communication is intentional"
-            supporting_data = self.assessment.analysis_dataframes[
-                "num_cross_segment_OT"
-            ][1].groupby(
-                [
-                    "connection_info.unmapped.src_subnet",
-                    "connection_info.unmapped.dst_subnet",
-                ]
-            ).size()
+            supporting_data = (
+                self.assessment.analysis_dataframes["num_cross_segment_OT"][1]
+                .groupby(
+                    [
+                        "connection_info.unmapped.src_subnet",
+                        "connection_info.unmapped.dst_subnet",
+                    ]
+                )
+                .size()
+            )
             # supporting_data_sorted = supporting_data.sort_values(ascending=False).reset_index(name="count")
-            supporting_data_grouped = supporting_data.groupby("connection_info.unmapped.src_subnet", group_keys=False)
-            supporting_data_sorted = supporting_data_grouped.apply(lambda x: x.sort_values(ascending=False))
+            supporting_data_grouped = supporting_data.groupby(
+                "connection_info.unmapped.src_subnet", group_keys=False
+            )
+            supporting_data_sorted = supporting_data_grouped.apply(
+                lambda x: x.sort_values(ascending=False)
+            )
             supporting_data_sorted_df = supporting_data_sorted.to_frame("count")
             self.report["executive_summary"]["cross_segment_OT"] = {
                 "description": descr,
@@ -1006,8 +1028,9 @@ class Report:
         executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
         executive_report += self.hide_details(
             "exec_cross_segment_ot",
-            self.report["executive_summary"]["cross_segment_OT"]["supporting_data"]
-            .to_html(),
+            self.report["executive_summary"]["cross_segment_OT"][
+                "supporting_data"
+            ].to_html(),
             additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
         )
         # executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
