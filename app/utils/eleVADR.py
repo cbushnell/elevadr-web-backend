@@ -747,24 +747,27 @@ class Assessor:
             report.generate_report()
             report_html = report.compile_report()
             report_html += "<hr>"
-            # Display the rest of the data
-            data_html = "<h1>Analysis Data:</h1>"
-            for df_name in self.analysis_dataframes.keys():
-                try:  # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
-                    if len(self.analysis_dataframes[df_name][0]) > 0:
-                        data_html += (
-                            f"<h2>{df_name}:</h2>"
-                            + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
-                            + self.analysis_dataframes[df_name][0].to_html(index=False)
-                        )
-                    else:
-                        data_html += (
-                            f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
-                        )
-                except:
-                    continue
-            return report_html + data_html
+            return report_html
         return ""
+    
+    def generate_analysis_page(self):
+        # Display the rest of the data
+        data_html = "<h1>Analysis Data:</h1>"
+        for df_name in self.analysis_dataframes.keys():
+            try:  # TODO: This is because some values in analysis dataframes aren't following convention - should fix that
+                if len(self.analysis_dataframes[df_name][0]) > 0:
+                    data_html += (
+                        f"<h2>{df_name}:</h2>"
+                        + f"<p>{self.analysis_dataframes[df_name][1]}</p>"
+                        + self.analysis_dataframes[df_name][0].to_html(index=False)
+                    )
+                else:
+                    data_html += (
+                        f"<h2>{df_name}:</h2>" + "<body>Nothing to report.</body>"
+                    )
+            except:
+                continue
+        return data_html
 
 
 @dataclass
@@ -1036,8 +1039,8 @@ class Report:
         data = self.report["risky_services_bar_chart"]
         plt.style.use("seaborn-v0_8-dark")
         plt.barh(data["x_axis"], data["y_axis"], height=0.1)
-        plt.xlabel("Category")
-        plt.ylabel("Count")
+        plt.xlabel("Count")
+        plt.ylabel("Category")
         plt.title("Risky Services by Category")
         tmpfile = BytesIO()
         plt.savefig(tmpfile, bbox_inches="tight", format="png")
@@ -1060,6 +1063,9 @@ class Report:
         html = f"<img src='data:image/png;base64,{encoded}'>"
         services_pie_panel += html
         report += services_pie_panel
+
+        # Analysis link
+
         return report
 
 

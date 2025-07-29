@@ -75,6 +75,10 @@ def run_analysis():
     )
     elevadr.run_analysis()
     report = elevadr.generate_report()
+    analysis_page = elevadr.generate_analysis_page()
+
+    report = report + "<details><summary>View Data Analysis</summary>" + analysis_page + "</details>"
+
     return f"""
     <!doctype html>
     <head>
@@ -83,3 +87,15 @@ def run_analysis():
     </head>
     {report}
     """
+
+# @app.route("/report/analysis")
+# def show_analysis():
+#     analysis = session["analysis-1"] + session["analysis-2"]
+#     return f"""
+#     <!doctype html>
+#     <head>
+#         <link rel="stylesheet" href="{url_for('static', filename="styles.css")}"/>
+#         <title>Report Analysis</title>
+#     </head>
+#     {analysis}
+#     """
