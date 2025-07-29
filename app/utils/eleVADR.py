@@ -6,6 +6,9 @@ import ipaddress
 import json
 import yaml
 import os
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
 
 from collections import namedtuple
 from dataclasses import dataclass
@@ -869,10 +872,18 @@ class Report:
         self.report["executive_summary"] = {}
         if "num_cross_segment_OT" in self.assessment.analysis_dataframes:
             # top_cross_segment = self.assessment.analysis_dataframes["num_cross_segment_OT"][1]["src_endpoint.ip"].value_counts().head(1)
-            descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions."
+            descr = "eleVADR detected OT traffic going across network segments, indicating segmentation gaps and potential external control of engineering functions. Verify that 1) the automated tool's guess at subnets are reasonable and 2) any cross subnet communication is intentional"
             supporting_data = self.assessment.analysis_dataframes[
                 "num_cross_segment_OT"
-            ][1][["src_endpoint.ip"]].value_counts()
+            ][1][
+                [
+                    "connection_info.unmapped.src_subnet",
+                    "connection_info.unmapped.dst_subnet",
+                ]
+            ].value_counts()
+            # supporting_data = self.assessment.analysis_dataframes[
+            # "num_cross_segment_OT"
+            # ][1][["src_endpoint.ip"]].value_counts()
             self.report["executive_summary"]["cross_segment_OT"] = {
                 "description": descr,
                 "supporting_data": supporting_data,
@@ -904,9 +915,12 @@ class Report:
 
     def service_counts_display(self):
         # get percentage of services in conn.log
-        self.report["service_pie_chart"] = (
-            self.conn_df["id.resp_p"].value_counts(normalize=True) * 100
-        )
+        values = self.assessment.conn_df["id.resp_p"].value_counts(normalize=True) * 100
+        subset = values[values > 1]
+        self.report["service_pie_chart"] = {
+            "values": subset.values,
+            "labels": subset.index,
+        }
 
     def architectural_insights(self):
         # connectivity
@@ -939,6 +953,27 @@ class Report:
         self.services_panel()
         self.risky_services_categories_chart()
         self.architectural_insights()
+        self.service_counts_display()
+
+    def hide_details(self, class_name, supporting_data, additional_details=""):
+        if additional_details:
+            details_html = f""" <details class="{class_name}">
+                    <summary> click here for supporting data </summary>
+                    <ul>
+                    <li>{additional_details}
+                    <li>{supporting_data}
+                    </ul>
+                </details>
+            """
+        else:
+            details_html = f""" <details class="{class_name}">
+                    <summary> click here for supporting data </summary>
+                    <ul>
+                    <li>{supporting_data}
+                    </ul>
+                </details>
+            """
+        return details_html
 
     def compile_report(self):
         report = "<h1>eleVADR Report:</h1>"
@@ -955,31 +990,74 @@ class Report:
 
         # Executive Summary
         executive_report = "<h2>Executive Report:</h2>"
-        executive_report += "<h3>cross_segment_OT:</h3>"
-        executive_report += f"<p>{self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
-        executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
+        # executive_report += "<h3>cross_segment_OT:</h3>"
+        executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
+        executive_report += self.hide_details(
+            "exec_cross_segment_ot",
+            self.report["executive_summary"]["cross_segment_OT"]["supporting_data"]
+            .to_frame()
+            .to_html(),
+            additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
+        )
+        # executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
+        executive_report += f"<p>2. {self.report["executive_summary"]["remote_access"]["description"]}<p>"
+        executive_report += self.hide_details(
+            "exec_remote_access",
+            self.report["executive_summary"]["remote_access"][
+                "supporting_data"
+            ].to_html(),
+        )
+        executive_report += f"<p>3. {self.report["executive_summary"]["legacy_protocols"]["description"]}<p>"
+        executive_report += self.hide_details(
+            "exec_legacy_protocols",
+            self.report["executive_summary"]["legacy_protocols"][
+                "supporting_data"
+            ].to_html(),
+        )
+
         report += executive_report
 
         # Services Panel
         services_panel = "<h2>Detected Services:</h2>"
-        for metric, data in self.report['service_metrics'].items():
+        for metric, data in self.report["service_metrics"].items():
             services_panel += f"<h3>{metric}:</h3>{data[0]}"
         report += services_panel
 
         # Devices Panel
         devices_panel = "<h2>Detected Devices:</h2>"
-        for metric, data in self.report['device_metrics'].items():
+        for metric, data in self.report["device_metrics"].items():
             devices_panel += f"<h3>{metric}:</h3>{data[0]}"
         report += devices_panel
 
-        # Risky Services
-        risky_services_panel = "<h2>Risky Services Bar Chart:</h2>"
+        # Risky Services Chart
+        risky_services_panel = "<h2>Risky Services Bar Chart:</h2> "
         data = self.report["risky_services_bar_chart"]
-        risky_services_panel += f"<h3>x_axis:</h3>{data["x_axis"]}"
-        risky_services_panel += f"<h3>y_axis:</h3>{data["y_axis"]}"
-        risky_services_panel += f"<h3>risky_services_panel:</h3>{data["supporting_data"]}"
+        plt.style.use("seaborn-v0_8-dark")
+        plt.barh(data["x_axis"], data["y_axis"], height=0.1)
+        plt.xlabel("Category")
+        plt.ylabel("Count")
+        plt.title("Risky Services by Category")
+        tmpfile = BytesIO()
+        plt.savefig(tmpfile, bbox_inches="tight", format="png")
+        encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
+        html = f"<img src='data:image/png;base64,{encoded}'>"
+        risky_services_panel += html
         report += risky_services_panel
 
+        # Services Pie Chart
+        services_pie_panel = "<h2>Services Breakdown:</h2> "
+        plt.pie(
+            self.report["service_pie_chart"]["values"],
+            labels=self.report["service_pie_chart"]["labels"],
+            autopct="%1.1f%%",
+        )
+        plt.title("Services Breakdown")
+        tmpfile = BytesIO()
+        plt.savefig(tmpfile, bbox_inches="tight", format="png")
+        encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
+        html = f"<img src='data:image/png;base64,{encoded}'>"
+        services_pie_panel += html
+        report += services_pie_panel
         return report
 
 
@@ -1000,13 +1078,13 @@ if __name__ == "__main__":
     a.check_segmented()
     a.create_devices_display()
     a.create_services_display()
-    r = Report(a)
-    r.executive_summary()
-    r.devices_panel()
-    r.services_panel()
-    r.risky_services_categories_chart()
-    r.service_counts_display()
-    r.architectural_insights()
+    # r = Report(a)
+    # r.executive_summary()
+    # r.devices_panel()
+    # r.services_panel()
+    # r.risky_services_categories_chart()
+    # r.service_counts_display()
+    # r.architectural_insights()
     # a.create_devices_display()
     # a.create_services_display()
     # a.merge_with_ICS(a.analysis_dataframes["Cross Segment Communication"][0])
@@ -1016,4 +1094,6 @@ if __name__ == "__main__":
     # print(a.conn_df)
     # print(a.known_services_df)
     # a.run_analysis()
-    # print(a.generate_report())
+    html = a.generate_report()
+    with open("eleVADR.html", "w") as f:
+        f.write(html)
