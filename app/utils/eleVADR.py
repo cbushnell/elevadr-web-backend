@@ -983,6 +983,12 @@ class Report:
 
     def compile_report(self):
         report = "<h1>eleVADR Report:</h1>"
+
+        self.assessment.get_date_range()
+        start_date = self.assessment.analysis_dataframes['date'][0].strftime('%Y-%m-%d %H:%M:%S')
+        end_date = self.assessment.analysis_dataframes['date'][1].strftime('%Y-%m-%d %H:%M:%S')
+        report += f"<h3>Uploaded PCAP Date-range:</h3><text>{start_date} - {end_date}</text>"
+        
         # Executive Summary Section
         # executive_report = "<h2>Executive Report:</h2>"
         # for executive_report_section in self.executive_report_sections:
