@@ -8810,7 +8810,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"rds2, Foxboro\/Invensys Foxboro DCS Informix",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "1542":{
         "Service Name":"gridgen-elmd",
@@ -22327,7 +22327,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"Secure Virtual Workspace, OPC UA Discovery Server",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "3481":{
         "Service Name":"cleanerliverc",
@@ -25939,7 +25939,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"Terabase, Emerson\/Fisher ROC Plus",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "4001":{
         "Service Name":"newoak",
@@ -30790,21 +30790,21 @@
         "Transport Protocol":"tcp, udp",
         "Description":"multimedia conference control tool, Telvent OASyS DNA",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "5051":{
         "Service Name":"ita-agent, Telvent OASyS DNA",
         "Transport Protocol":"tcp, udp",
         "Description":"ITA Agent, Telvent OASyS DNA",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "5052":{
         "Service Name":"ita-manager, Telvent OASyS DNA",
         "Transport Protocol":"tcp, udp",
         "Description":"ITA Manager, Telvent OASyS DNA",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "5053":{
         "Service Name":"rlm, rlm-disc",
@@ -30895,7 +30895,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"Channel Access 2, Telvent OASyS DNA",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "5066":{
         "Service Name":"stanag-5066",
@@ -32295,7 +32295,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"TiePie engineering data acquisition, TiePie engineering data acquisition (discovery), OSIsoft PI Server",
         "Source":"IANA",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "5453":{
         "Service Name":"surebox",
@@ -40779,7 +40779,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"MICROMUSE-NCPW, OMRON FINS protocol",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "9612":{
         "Service Name":"streamcomm-ds",
@@ -41773,7 +41773,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"Johnson Controls Metasys N1",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "11095":{
         "Service Name":"weave",
@@ -43460,28 +43460,28 @@
         "Transport Protocol":"tcp, udp",
         "Description":"BP Java MSVC Protocol, ABB Ranger 2003",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "13724":{
         "Service Name":"vnetd, ABB Ranger 2003",
         "Transport Protocol":"tcp, udp",
         "Description":"Veritas Network Utility, ABB Ranger 2003",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "13782":{
         "Service Name":"bpcd, ABB Ranger 2003",
         "Transport Protocol":"tcp, udp",
         "Description":"VERITAS NetBackup, ABB Ranger 2003",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "13783":{
         "Service Name":"vopied, ABB Ranger 2003",
         "Transport Protocol":"tcp, udp",
         "Description":"VOPIED Protocol, ABB Ranger 2003",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "13785":{
         "Service Name":"nbdb",
@@ -44097,7 +44097,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"Beckman Instruments, Inc., Iconic Genesis32 GenBroker (TCP)",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "18104":{
         "Service Name":"radpdf",
@@ -50460,14 +50460,14 @@
         "Transport Protocol":"tcp, udp",
         "Description":"InfoVista Server Database, SNC GENe",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "38001":{
         "Service Name":"ivs-insertion, SNC GENe",
         "Transport Protocol":"tcp, udp",
         "Description":"InfoVista Server Insertion, SNC GENe",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "38002":{
         "Service Name":"cresco-control, crescoctrl-disc",
@@ -56648,7 +56648,7 @@
         "Transport Protocol":"tcp, udp",
         "Description":"EBA PRISE, Foxboro\/Invensys Foxboro DCS AIMAPI",
         "Source":"IANA, https:\/\/github.com\/ITI\/ICS-Security-Tools\/tree\/master\/protocols",
-        "System Type":"IT, ICS"
+        "System Type":"ICS"
     },
     "45824":{
         "Service Name":"dai-shell",
