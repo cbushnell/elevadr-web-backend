@@ -24,7 +24,7 @@ from app.utils.utils import (
     load_consts,
     check_ip_version,
     port_risk,
-    port_to_service
+    port_to_service,
 )
 
 
@@ -350,11 +350,7 @@ class Assessor:
         }
 
         # The columns to be recorded in the report
-        display_cols = [
-            "src_endpoint.ip",
-            "dst_endpoint.ip",
-            "dst_endpoint.port"
-        ]
+        display_cols = ["src_endpoint.ip", "dst_endpoint.ip", "dst_endpoint.port"]
 
         # Connections from internal to external addresses
         problematic_internals = self.conn_df[
@@ -370,19 +366,31 @@ class Assessor:
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
         ]
 
-        # Assign dataframe to the collection of final reports and apply field conversions - may not have data 
+        # Assign dataframe to the collection of final reports and apply field conversions - may not have data
         try:
             sus_conn_int_to_ext = (
-                problematic_internals.rename(columns=display_cols_conversion)[display_cols]
+                problematic_internals.rename(columns=display_cols_conversion)[
+                    display_cols
+                ]
                 .drop_duplicates()
                 .sort_values(["src_endpoint.ip", "dst_endpoint.ip"])
             )
             # print(sus_conn_int_to_ext)
-            sus_conn_int_to_ext["connection_info.unmapped.service_name"] = sus_conn_int_to_ext.apply(
-                lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Service Name"], axis=1
-            ) 
-            sus_conn_int_to_ext["connection_info.unmapped.service_description"] = sus_conn_int_to_ext.apply(
-                lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Description"], axis=1
+            sus_conn_int_to_ext["connection_info.unmapped.service_name"] = (
+                sus_conn_int_to_ext.apply(
+                    lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]][
+                        "Service Name"
+                    ],
+                    axis=1,
+                )
+            )
+            sus_conn_int_to_ext["connection_info.unmapped.service_description"] = (
+                sus_conn_int_to_ext.apply(
+                    lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]][
+                        "Description"
+                    ],
+                    axis=1,
+                )
             )
             self.analysis_dataframes[
                 "Suspicious Connections from Internal Sources to External Destinations"
@@ -481,6 +489,8 @@ class Assessor:
             "network_activity.category",
             "connection_info.unmapped.src_subnet",
             "connection_info.unmapped.dst_subnet",
+            "orig_l2_addr",
+            "resp_l2_addr",
         ]
 
         # TODO: Given output of check_segmented, identify where our guess at networks might be wrong
@@ -506,48 +516,38 @@ class Assessor:
         )  # TODO: Should probably add this to a different collection, if they aren't dataframes (or just add the dataframe and do the len later)
         ot_services_df = pd.merge(
             self.conn_df[
-                [
-                    "id.orig_h",
-                    "id.resp_h",
-                    "id.resp_p",
-                ]
+                ["id.orig_h", "id.resp_h", "id.resp_p", "orig_l2_addr", "resp_l2_addr"]
             ],
             self.known_ics_services,
             left_on="id.resp_p",
             right_on=["connection_info.port"],
             how="inner",
         ).drop_duplicates()
-        OT_device_ips = pd.concat(
-            [ot_services_df["id.orig_h"], ot_services_df["id.resp_h"]]
+        OT_device_macs = pd.concat(
+            [ot_services_df["orig_l2_addr"], ot_services_df["resp_l2_addr"]]
         )
-        # Add in known OT manufacturers, where the OT manufacturer is the src_ip
-        OT_device_ips = pd.concat(
-            [OT_device_ips, self.matched_manufacturers_df["device.ip"]]
-        ).unique()
-        num_ot_devices = len(OT_device_ips)
-        # to merge with manufacturers, simply grab from conn.log where the IPs match and then drop dups
-        ot_manufactured_comms = self.conn_df[
-            self.conn_df["id.orig_h"].isin(self.matched_manufacturers_df["device.ip"])
-        ]
-        ot_services_and_manufacturers = pd.concat(
-            [ot_services_df, ot_manufactured_comms]
+        # Add in known OT manufacturers, where the OT manufacturer is the src mac
+        OT_device_macs = pd.DataFrame(
+            pd.concat([OT_device_macs, self.matched_manufacturers_df["device.mac"]])
         )
+        OT_device_macs.columns = ["orig_l2_addr"]
+        num_ot_devices = len(OT_device_macs.drop_duplicates())
         # Now merge with cross segment
         self.analysis_dataframes["num_OT_devices"] = (
             num_ot_devices,
-            OT_device_ips,
+            OT_device_macs,
         )  # TODO: Need to fix this within the analysis dataframes collection - num_ot_devices is a not a dataframe
         try:
             cross_segment_OT_services = pd.merge(
-                ot_services_and_manufacturers,
+                OT_device_macs,
                 self.cross_segment_traffic_display,
-                left_on="id.orig_h",
-                right_on="src_endpoint.ip",
+                left_on="orig_l2_addr",
+                right_on="orig_l2_addr",
                 how="right",
             )[
                 [
-                    "src_endpoint.ip",
-                    "dst_endpoint.ip",
+                    "orig_l2_addr",
+                    "resp_l2_addr",
                     "dst_endpoint.port",
                     "connection_info.unmapped.src_subnet",
                     "connection_info.unmapped.dst_subnet",
@@ -556,11 +556,14 @@ class Assessor:
             num_cross_segment_OT_connections = len(cross_segment_OT_services)
 
             num_cross_segment_OT_sources = len(
-                cross_segment_OT_services["src_endpoint.ip"].drop_duplicates()
+                cross_segment_OT_services["orig_l2_addr"].drop_duplicates()
             )
             # Num OT Cross Segment Connections
             num_cross_segment_OT_connections = len(cross_segment_OT_services)
-            self.analysis_dataframes["num_OT_devices"] = (num_ot_devices, OT_device_ips)
+            self.analysis_dataframes["num_OT_devices"] = (
+                num_ot_devices,
+                OT_device_macs,
+            )
             self.analysis_dataframes["num_cross_segment_OT"] = (
                 num_cross_segment_OT_connections,
                 cross_segment_OT_services,
@@ -973,7 +976,7 @@ class Report:
         # self.assessment.known_ports_df["Service Name"].drop_duplicates()
         self.report["service_pie_chart"] = {
             "values": subset.values,
-            "labels": subset_services
+            "labels": subset_services,
         }
 
     def architectural_insights(self):
@@ -993,8 +996,12 @@ class Report:
         return temp_dict
 
     def add_protocol_breakdown(self):
-        ot_protocols = None
-        ot_manufacturers = None
+        ot_protocols = self.known_ics_services[
+            "connection_info.unmapped.service_description"
+        ].drop_duplicates()
+        ot_manufacturers = self.matched_manufacturers_df[
+            "device.vendor_name"
+        ].drop_duplicates()
         remote_access = None
         return {}
 
@@ -1033,8 +1040,12 @@ class Report:
         report = "<h1>eleVADR Report:</h1>"
 
         self.assessment.get_date_range()
-        start_date = self.assessment.analysis_dataframes['date'][0].strftime('%Y-%m-%d %H:%M:%S')
-        end_date = self.assessment.analysis_dataframes['date'][1].strftime('%Y-%m-%d %H:%M:%S')
+        start_date = self.assessment.analysis_dataframes["date"][0].strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        end_date = self.assessment.analysis_dataframes["date"][1].strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
         report += f"""
         <div class="metric">
             <h3>Uploaded PCAP Date-range:</h3>
@@ -1055,8 +1066,9 @@ class Report:
         # Executive Summary
         executive_report = "<h2>Executive Report:</h2>"
         # executive_report += "<h3>cross_segment_OT:</h3>"
+        counter = 1
         try:
-            executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
+            executive_report += f"<p>{counter}. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
             executive_report += self.hide_details(
                 "exec_cross_segment_ot",
                 self.report["executive_summary"]["cross_segment_OT"][
@@ -1064,27 +1076,30 @@ class Report:
                 ].to_html(),
                 additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
             )
+            counter += 1
         except:
             pass
         # executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
         try:
-            executive_report += f"<p>2. {self.report["executive_summary"]["remote_access"]["description"]}<p>"
+            executive_report += f"<p>{counter}. {self.report["executive_summary"]["remote_access"]["description"]}<p>"
             executive_report += self.hide_details(
                 "exec_remote_access",
                 self.report["executive_summary"]["remote_access"][
                     "supporting_data"
                 ].to_html(),
             )
+            counter += 1
         except:
             pass
         try:
-            executive_report += f"<p>3. {self.report["executive_summary"]["legacy_protocols"]["description"]}<p>"
+            executive_report += f"<p>{counter}. {self.report["executive_summary"]["legacy_protocols"]["description"]}<p>"
             executive_report += self.hide_details(
                 "exec_legacy_protocols",
                 self.report["executive_summary"]["legacy_protocols"][
                     "supporting_data"
                 ].to_html(),
             )
+            counter += 1
         except:
             pass
 
@@ -1160,8 +1175,10 @@ class Report:
             report += sus_int_to_ext_conn_panel
         except:
             pass
-        return report
 
+        # allowList download
+
+        return report
 
 
 if __name__ == "__main__":
