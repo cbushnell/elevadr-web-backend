@@ -352,9 +352,7 @@ class Assessor:
         display_cols = [
             "src_endpoint.ip",
             "dst_endpoint.ip",
-            "dst_endpoint.port",
-            "connection_info.protocol_name",
-            "network_activity.category",
+            "dst_endpoint.port"
         ]
 
         # Connections from internal to external addresses
@@ -372,12 +370,19 @@ class Assessor:
         ]
 
         # Assign dataframe to the collection of final reports and apply field conversions
+        sus_conn_int_to_ext = (
+            problematic_internals.rename(columns=display_cols_conversion)[display_cols]
+            .drop_duplicates()
+            .sort_values(["src_endpoint.ip", "dst_endpoint.ip"])
+        )
+        print(sus_conn_int_to_ext)
+        sus_conn_int_to_ext["connection_info.unmapped.service_name"] = sus_conn_int_to_ext.apply(
+            lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Service Name"], axis=1
+        )
         self.analysis_dataframes[
             "Suspicious Connections from Internal Sources to External Destinations"
         ] = (
-            problematic_internals.rename(columns=display_cols_conversion)[display_cols]
-            .drop_duplicates()
-            .sort_values(["src_endpoint.ip", "dst_endpoint.ip"]),
+            sus_conn_int_to_ext,
             description_int_to_ext,
         )
 
@@ -821,7 +826,7 @@ class Report:
         device_metrics = {
             "Hosts": self.assessment.analysis_dataframes["num_devices"],
             "OT Hosts": self.assessment.analysis_dataframes["num_OT_devices"],
-            "Cross Segment Traffic Originating from OT": self.assessment.analysis_dataframes[
+            "Number of OT Hosts Communicating Cross-Segment": self.assessment.analysis_dataframes[
                 "num_cross_segment_OT_sources"
             ],
         }
@@ -1121,8 +1126,15 @@ class Report:
         services_pie_panel += html
         report += services_pie_panel
 
-        # Analysis link
-
+        # Suspicious Connections from Internal Sources to External Destinations
+        sus_int_to_ext_conn_panel = "<h2>Suspicious Connections from Internal Sources to External Destinations:</h2> "
+        sus_int_to_ext_conn_panel += f"<p>{self.assessment.analysis_dataframes[
+            "Suspicious Connections from Internal Sources to External Destinations"
+            ][1]}</p>"
+        sus_int_to_ext_conn_panel += self.assessment.analysis_dataframes[
+            "Suspicious Connections from Internal Sources to External Destinations"
+        ][0].to_html(index=False)
+        report += sus_int_to_ext_conn_panel
         return report
 
 
