@@ -1013,6 +1013,17 @@ class Report:
 
     def compile_report(self):
         report = "<h1>eleVADR Report:</h1>"
+
+        self.assessment.get_date_range()
+        start_date = self.assessment.analysis_dataframes['date'][0].strftime('%Y-%m-%d %H:%M:%S')
+        end_date = self.assessment.analysis_dataframes['date'][1].strftime('%Y-%m-%d %H:%M:%S')
+        report += f"""
+        <div class="metric">
+            <h3>Uploaded PCAP Date-range:</h3>
+            <text>{start_date} - {end_date}</text>
+        </div>
+        """
+        
         # Executive Summary Section
         # executive_report = "<h2>Executive Report:</h2>"
         # for executive_report_section in self.executive_report_sections:
@@ -1056,13 +1067,23 @@ class Report:
         # Services Panel
         services_panel = "<h2>Detected Services:</h2>"
         for metric, data in self.report["service_metrics"].items():
-            services_panel += f"<h3>{metric}:</h3>{data[0]}"
+            services_panel += f"""
+            <div class="metric">
+                <h3>{metric}:</h3>
+                <text>{data[0]}</text>
+            </div>
+            """
         report += services_panel
 
         # Devices Panel
         devices_panel = "<h2>Detected Devices:</h2>"
         for metric, data in self.report["device_metrics"].items():
-            devices_panel += f"<h3>{metric}:</h3>{data[0]}"
+            devices_panel += f"""
+            <div class="metric">
+                <h3>{metric}:</h3>
+                <text>{data[0]}</text>
+            </div>
+            """
         report += devices_panel
 
         # Risky Services Chart
