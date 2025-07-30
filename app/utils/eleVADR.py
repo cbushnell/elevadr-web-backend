@@ -10,6 +10,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from io import BytesIO
 import base64
 
@@ -818,10 +819,10 @@ class Report:
         # num cross segment OT, [2][0]
         # display of cross segment OT, [2][1]
         device_metrics = {
-            "hosts": self.assessment.analysis_dataframes["num_devices"],
-            "ot_hosts": self.assessment.analysis_dataframes["num_OT_devices"],
-            "ot_cross_segment_conn": self.assessment.analysis_dataframes[
-                "num_cross_segment_OT"
+            "Hosts": self.assessment.analysis_dataframes["num_devices"],
+            "OT Hosts": self.assessment.analysis_dataframes["num_OT_devices"],
+            "Cross Segment Traffic Originating from OT": self.assessment.analysis_dataframes[
+                "num_cross_segment_OT_sources"
             ],
         }
 
@@ -835,9 +836,11 @@ class Report:
     def services_panel(self):
         # print("Services Metrics")
         service_metrics = {
-            "services": self.assessment.analysis_dataframes["num_services"],
-            "ot_services": self.assessment.analysis_dataframes["num_OT_services"],
-            "risky_services": self.assessment.analysis_dataframes["num_risky_services"],
+            "Services": self.assessment.analysis_dataframes["num_services"],
+            "OT Services": self.assessment.analysis_dataframes["num_OT_services"],
+            "Potentially Risky Services": self.assessment.analysis_dataframes[
+                "num_risky_services"
+            ],
         }
         self.report["service_metrics"] = service_metrics
         # print(service_metrics)
@@ -943,8 +946,13 @@ class Report:
 
     def service_counts_display(self):
         # get percentage of services in conn.log
-        values = self.assessment.conn_df["id.resp_p"].value_counts(normalize=True) * 100
+        values = (
+            self.assessment.conn_df[["id.resp_p"]].value_counts(normalize=True) * 100
+        )
         subset = values[values > 1]
+        subset.reset_index()
+        # connection_info.unmapped.service_name
+        # self.assessment.known_ports_df["Service Name"].drop_duplicates()
         self.report["service_pie_chart"] = {
             "values": subset.values,
             "labels": subset.index,
@@ -1065,6 +1073,7 @@ class Report:
         plt.xlabel("Count")
         plt.ylabel("Category")
         plt.title("Risky Services by Category")
+        plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
         tmpfile = BytesIO()
         plt.savefig(tmpfile, bbox_inches="tight", format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
@@ -1073,15 +1082,19 @@ class Report:
         report += risky_services_panel
 
         # Services Pie Chart
+        fig = plt.figure()
         services_pie_panel = "<h2>Services Breakdown:</h2> "
-        plt.pie(
+        patches, texts, _ = plt.pie(
             self.report["service_pie_chart"]["values"],
             labels=self.report["service_pie_chart"]["labels"],
             autopct="%1.1f%%",
         )
         plt.title("Services Breakdown")
         tmpfile = BytesIO()
-        plt.savefig(tmpfile, bbox_inches="tight", format="png")
+        # plt.legend(patches, labels, loc="best")
+        plt.axis("equal")
+        plt.tight_layout()
+        plt.savefig(tmpfile, format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
         html = f"<img src='data:image/png;base64,{encoded}'>"
         services_pie_panel += html
