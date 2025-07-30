@@ -24,6 +24,8 @@ ICS_manufacturer_search_words:
   - phoenix contact
   - eaton
   - automation
+  - seedsware
+  - intelligent platform
 
 # ICS_ports:
 #   502: "Modbus"
