@@ -46,3 +46,10 @@ def port_risk(row, port_risk):
     """Matches ports in the Known Services table with information in the port_risk document"""
     values = port_risk.get(str(row['connection_info.port']), "NaN")
     return pd.Series(values)
+
+def port_to_service(port, known_ports_df):
+    """Checks for the existance of the port in the list and returns the service name, if it exists. Otherwise, returns the port number."""
+    try:
+        return str(known_ports_df.loc[port]["Service Name"])
+    except:
+        return str(port)

@@ -24,6 +24,7 @@ from app.utils.utils import (
     load_consts,
     check_ip_version,
     port_risk,
+    port_to_service
 )
 
 
@@ -369,22 +370,28 @@ class Assessor:
             (self.conn_df["local_orig"] == "F") & (self.conn_df["local_resp"] == "T")
         ]
 
-        # Assign dataframe to the collection of final reports and apply field conversions
-        sus_conn_int_to_ext = (
-            problematic_internals.rename(columns=display_cols_conversion)[display_cols]
-            .drop_duplicates()
-            .sort_values(["src_endpoint.ip", "dst_endpoint.ip"])
-        )
-        print(sus_conn_int_to_ext)
-        sus_conn_int_to_ext["connection_info.unmapped.service_name"] = sus_conn_int_to_ext.apply(
-            lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Service Name"], axis=1
-        )
-        self.analysis_dataframes[
-            "Suspicious Connections from Internal Sources to External Destinations"
-        ] = (
-            sus_conn_int_to_ext,
-            description_int_to_ext,
-        )
+        # Assign dataframe to the collection of final reports and apply field conversions - may not have data 
+        try:
+            sus_conn_int_to_ext = (
+                problematic_internals.rename(columns=display_cols_conversion)[display_cols]
+                .drop_duplicates()
+                .sort_values(["src_endpoint.ip", "dst_endpoint.ip"])
+            )
+            # print(sus_conn_int_to_ext)
+            sus_conn_int_to_ext["connection_info.unmapped.service_name"] = sus_conn_int_to_ext.apply(
+                lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Service Name"], axis=1
+            ) 
+            sus_conn_int_to_ext["connection_info.unmapped.service_description"] = sus_conn_int_to_ext.apply(
+                lambda x: self.known_ports_df.loc[x["dst_endpoint.port"]]["Description"], axis=1
+            )
+            self.analysis_dataframes[
+                "Suspicious Connections from Internal Sources to External Destinations"
+            ] = (
+                sus_conn_int_to_ext,
+                description_int_to_ext,
+            )
+        except ValueError:
+            pass
 
         # Assign dataframe to the collection of final reports and apply field conversions
         self.analysis_dataframes[
@@ -834,7 +841,7 @@ class Report:
         # self.assessment.analysis_dataframes["cross_segment_OT_devices_display"]]
 
         self.report["device_metrics"] = device_metrics
-        print(device_metrics)
+        # print(device_metrics)
 
         return device_metrics
 
@@ -956,11 +963,17 @@ class Report:
         )
         subset = values[values > 1]
         subset.reset_index()
+        subset_df = subset.to_frame(0)
+        subset_services = subset_df.apply(
+            lambda x: port_to_service(x.name, self.assessment.known_ports_df), axis=1
+        )
+        print(subset_services)
+        print(subset.values)
         # connection_info.unmapped.service_name
         # self.assessment.known_ports_df["Service Name"].drop_duplicates()
         self.report["service_pie_chart"] = {
             "values": subset.values,
-            "labels": subset.index,
+            "labels": subset_services
         }
 
     def architectural_insights(self):
@@ -1028,7 +1041,6 @@ class Report:
             <text>{start_date} - {end_date}</text>
         </div>
         """
-        
         # Executive Summary Section
         # executive_report = "<h2>Executive Report:</h2>"
         # for executive_report_section in self.executive_report_sections:
@@ -1043,29 +1055,38 @@ class Report:
         # Executive Summary
         executive_report = "<h2>Executive Report:</h2>"
         # executive_report += "<h3>cross_segment_OT:</h3>"
-        executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
-        executive_report += self.hide_details(
-            "exec_cross_segment_ot",
-            self.report["executive_summary"]["cross_segment_OT"][
-                "supporting_data"
-            ].to_html(),
-            additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
-        )
+        try:
+            executive_report += f"<p>1. {self.report["executive_summary"]["cross_segment_OT"]["description"]}<p>"
+            executive_report += self.hide_details(
+                "exec_cross_segment_ot",
+                self.report["executive_summary"]["cross_segment_OT"][
+                    "supporting_data"
+                ].to_html(),
+                additional_details="Data only includes hosts that have ever used an OT service (e.g., modbus) or produced by an OT manufacturer. Displayed subnets assume a /24 network",
+            )
+        except:
+            pass
         # executive_report += self.report["executive_summary"]["cross_segment_OT"]["supporting_data"].to_frame().to_html()
-        executive_report += f"<p>2. {self.report["executive_summary"]["remote_access"]["description"]}<p>"
-        executive_report += self.hide_details(
-            "exec_remote_access",
-            self.report["executive_summary"]["remote_access"][
-                "supporting_data"
-            ].to_html(),
-        )
-        executive_report += f"<p>3. {self.report["executive_summary"]["legacy_protocols"]["description"]}<p>"
-        executive_report += self.hide_details(
-            "exec_legacy_protocols",
-            self.report["executive_summary"]["legacy_protocols"][
-                "supporting_data"
-            ].to_html(),
-        )
+        try:
+            executive_report += f"<p>2. {self.report["executive_summary"]["remote_access"]["description"]}<p>"
+            executive_report += self.hide_details(
+                "exec_remote_access",
+                self.report["executive_summary"]["remote_access"][
+                    "supporting_data"
+                ].to_html(),
+            )
+        except:
+            pass
+        try:
+            executive_report += f"<p>3. {self.report["executive_summary"]["legacy_protocols"]["description"]}<p>"
+            executive_report += self.hide_details(
+                "exec_legacy_protocols",
+                self.report["executive_summary"]["legacy_protocols"][
+                    "supporting_data"
+                ].to_html(),
+            )
+        except:
+            pass
 
         report += executive_report
 
@@ -1115,6 +1136,7 @@ class Report:
             labels=self.report["service_pie_chart"]["labels"],
             autopct="%1.1f%%",
         )
+
         plt.title("Services Breakdown")
         tmpfile = BytesIO()
         # plt.legend(patches, labels, loc="best")
@@ -1127,15 +1149,19 @@ class Report:
         report += services_pie_panel
 
         # Suspicious Connections from Internal Sources to External Destinations
-        sus_int_to_ext_conn_panel = "<h2>Suspicious Connections from Internal Sources to External Destinations:</h2> "
-        sus_int_to_ext_conn_panel += f"<p>{self.assessment.analysis_dataframes[
-            "Suspicious Connections from Internal Sources to External Destinations"
-            ][1]}</p>"
-        sus_int_to_ext_conn_panel += self.assessment.analysis_dataframes[
-            "Suspicious Connections from Internal Sources to External Destinations"
-        ][0].to_html(index=False)
-        report += sus_int_to_ext_conn_panel
+        try:
+            sus_int_to_ext_conn_panel = "<h2>Suspicious Connections from Internal Sources to External Destinations:</h2> "
+            sus_int_to_ext_conn_panel += f"<p>{self.assessment.analysis_dataframes[
+                "Suspicious Connections from Internal Sources to External Destinations"
+                ][1]}</p>"
+            sus_int_to_ext_conn_panel += self.assessment.analysis_dataframes[
+                "Suspicious Connections from Internal Sources to External Destinations"
+            ][0].to_html(index=False)
+            report += sus_int_to_ext_conn_panel
+        except:
+            pass
         return report
+
 
 
 if __name__ == "__main__":
