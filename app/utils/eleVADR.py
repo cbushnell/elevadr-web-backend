@@ -53,7 +53,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        self.zeekify()
+        # self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -1123,6 +1123,7 @@ class Report:
         plt.savefig(tmpfile, bbox_inches="tight", format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
         html = f"<img src='data:image/png;base64,{encoded}'>"
+        plt.clf()
         risky_services_panel += html
         report += risky_services_panel
 
@@ -1142,6 +1143,7 @@ class Report:
         plt.savefig(tmpfile, format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
         html = f"<img src='data:image/png;base64,{encoded}'>"
+        plt.clf()
         services_pie_panel += html
         report += services_pie_panel
 
