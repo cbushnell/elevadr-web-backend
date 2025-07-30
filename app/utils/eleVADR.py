@@ -53,7 +53,7 @@ class Assessor:
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
         # Process pcap with Zeek
-        # self.zeekify()
+        self.zeekify()
 
         # Convert Zeek logs to pandas dataframes
         log_to_df = LogToDataFrame()
@@ -967,8 +967,6 @@ class Report:
         subset_services = subset_df.apply(
             lambda x: port_to_service(x.name, self.assessment.known_ports_df), axis=1
         )
-        print(subset_services)
-        print(subset.values)
         # connection_info.unmapped.service_name
         # self.assessment.known_ports_df["Service Name"].drop_duplicates()
         self.report["service_pie_chart"] = {
@@ -1137,7 +1135,6 @@ class Report:
             autopct="%1.1f%%",
         )
 
-        plt.title("Services Breakdown")
         tmpfile = BytesIO()
         # plt.legend(patches, labels, loc="best")
         plt.axis("equal")
