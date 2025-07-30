@@ -970,8 +970,6 @@ class Report:
         subset_services = subset_df.apply(
             lambda x: port_to_service(x.name, self.assessment.known_ports_df), axis=1
         )
-        print(subset_services)
-        print(subset.values)
         # connection_info.unmapped.service_name
         # self.assessment.known_ports_df["Service Name"].drop_duplicates()
         self.report["service_pie_chart"] = {
@@ -1140,6 +1138,7 @@ class Report:
         plt.savefig(tmpfile, bbox_inches="tight", format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
         html = f"<img src='data:image/png;base64,{encoded}'>"
+        plt.clf()
         risky_services_panel += html
         report += risky_services_panel
 
@@ -1152,7 +1151,6 @@ class Report:
             autopct="%1.1f%%",
         )
 
-        plt.title("Services Breakdown")
         tmpfile = BytesIO()
         # plt.legend(patches, labels, loc="best")
         plt.axis("equal")
@@ -1160,6 +1158,7 @@ class Report:
         plt.savefig(tmpfile, format="png")
         encoded = base64.b64encode(tmpfile.getvalue()).decode("utf-8")
         html = f"<img src='data:image/png;base64,{encoded}'>"
+        plt.clf()
         services_pie_panel += html
         report += services_pie_panel
 
