@@ -91,8 +91,9 @@ class Assessor:
             dsts_per_src = self.conn_df.loc[
                 self.conn_df["id.orig_h"] == src_ip, ["id.resp_h", "id.resp_p"]
             ].drop_duplicates()
-            allowlist[src_ip] = dsts_per_src
-        self.analysis_dataframes["allowlist"] = allowlist
+            allowlist[src_ip] = dsts_per_src.values.tolist()
+        with open(Path(self.path_to_assessor_data + "/allowlist.json"), "w") as fw:
+            json.dump(allowlist, fw)
 
     def ics_manufacturer_col(self):
         """Identify host device manufacturers by comparing MAC addresses in pcap to Organizationally Unique Identifiers (OUIs)"""
@@ -1176,6 +1177,8 @@ class Report:
             pass
 
         # allowList download
+        download_link = f"<a href='{Path(self.assessment.path_to_assessor_data + '/allowlist.json')}' download>Download foundation for Allowlist based on observed traffic</a>"
+        report += download_link
 
         return report
 
