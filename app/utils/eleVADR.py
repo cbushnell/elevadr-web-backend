@@ -1175,6 +1175,8 @@ class Report:
             report += sus_int_to_ext_conn_panel
         except:
             pass
+        
+        self.assessment.create_allowlist()
 
         # allowList download
         download_link = f"<a href='{Path(self.assessment.path_to_assessor_data + '/allowlist.json')}' download>Download foundation for Allowlist based on observed traffic</a>"
