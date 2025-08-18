@@ -16,8 +16,39 @@ def convert_ip_to_str(ip):
     except ipaddress.AddressValueError:
         return str(ipaddress.IPv6Address(ip))
     
-def check_ip_version(ip):
-    return ipaddress.ip_address(str(ip)).version
+def check_ip_version(ip) -> int:
+    try:
+        return ipaddress.ip_address(str(ip)).version
+    except:
+        return 99
+
+def protocol_type_processing(ip):
+    ip_type = None
+    ip_scope = None
+    try:
+        ipaddress_ip = ipaddress.ip_address(str(ip))
+
+        # Type
+        if ipaddress_ip.is_multicast:
+            ip_type = "multicast"
+        elif ipaddress_ip.is_link_local:
+            ip_type = "link-local"
+        elif ( 
+            ipaddress_ip.version == 4 and
+            int.from_bytes(ipaddress.ip_address(ipaddress_ip).packed) & 255 == 255
+        ):
+            ip_type = "broadcast"
+        else:
+            ip_type = "unicast"
+
+        # Scope
+        if ipaddress_ip.is_private or ipaddress_ip in ipaddress.ip_network("ff00::/8"):
+            ip_scope = "private"
+        else:
+            ip_scope = "global"
+    except Exception as e:
+        print(e)
+    return ip_type, ip_scope
 
 def get_list_of_manufacturers(oui_path, row, ics_manufacturers):
     """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""

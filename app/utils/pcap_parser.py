@@ -13,6 +13,7 @@ from app.utils.utils import (
     check_ip_version,
     port_risk,
     port_to_service,
+    protocol_type_processing
 )
 
 class PcapParser():
@@ -29,9 +30,11 @@ class PcapParser():
         self.path_to_zeek_scripts = path_to_zeek_scripts
         self.path_to_assessor_data = path_to_assessor_data
 
+        # Dataframe which contains the network traffic flow data
         traffic_df_schema = {
             "connection_info.protocol_ver_id": int, # 0 - UNK, 4 - IPv4, 6 - IPv6, 99 - other
-            "connection_info.protocol_service": str, # unicast, multicast, broadcast
+            "connection_info.type": str, # CUSTOM: unicast, multicast, broadcast
+            "connection_info.scope": str, # private, public, link-local, 
             "connection_info.direction_id": int, # 0 - UNK, 1 - inbound, 2 - outbound, 3 - lateral, 99 - other
             "connection_info.protocol_name": str, # tcp, udp, other IANA assigned value
             "dst_endpoint.ip": str,
@@ -50,25 +53,45 @@ class PcapParser():
         }
         self.traffic_df = pd.DataFrame(columns=traffic_df_schema.keys()).astype(traffic_df_schema)
         
+        # Dataframe which contains device data
         endpoints_df_schema = {
             "mac": str,
             "manufacturer": str,
             "ipv4_ips": str,
-            "ipv6_ips": str, # TODO: Make a column that identifies which 
+            "ipv6_ips": str, # TODO: Make a column that identifies which
             "ipv4_subnets": str,
             "ipv6_subnets": str, # will we ever use this?
+            "device.protocol_ver_id": str # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, [4, 6] - IPv4 and IPv6, 99 - other
         }
         self.hosts_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
 
 
         log_to_df = LogToDataFrame()
-        self.conn_df = log_to_df.create_dataframe(
+        conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
-        # TODO: Map all of this into "traffic_df"
-       
-        self.conn_df["connection_info.protocol_ver"] = self.conn_df["id.orig_h"].apply(
+
+        # Apply mappings for traffic_df
+        mapped_conn_df = conn_df.rename(
+            columns={
+                "id.orig_h": "src_endpoint.ip",
+                "id.orig_p": "src_endpoint.port",
+                "id.resp_h": "dst_endpoint.ip",
+                "id.resp_p": "dst_endpoint.port",
+                "ip_proto": "connection_info.protocol_id",
+                "orig_l2_addr": "src_endpoint.mac",
+                "resp_l2_addr": "dst_endpoint.mac"
+            }
+        )
+
+        # Populate "connection_info.protocol_ver" w/ IP version (IPv4 or IPv6)
+        mapped_conn_df["connection_info.protocol_ver_id"] = self.conn_df["src_endpoint.ip"].apply(
             check_ip_version
+        )
+
+        # Determine the connection type type (ex. multicast) and scope (ex. private)
+        mapped_conn_df["connection_info.type"], mapped_conn_df["connection_info.scope"] = mapped_conn_df["dst_endpoint.ip"].apply(
+            protocol_type_processing
         )
 
         self.known_services_df = log_to_df.create_dataframe(
@@ -91,3 +114,6 @@ class PcapParser():
                 f"Log::default_logdir={self.upload_output_zeek_dir}",
             ]
         )
+
+if __name__ == "__main__":
+    pass
