@@ -5,7 +5,7 @@ from flask_session import Session
 from werkzeug.utils import secure_filename
 import subprocess
 
-from app.utils.eleVADR import Assessor
+from utils.eleVADR import Assessor
 
 # Declare the project root directory ("app", in this case) for relative paths
 PROJECT_ROOT = Path(__file__).resolve().parent

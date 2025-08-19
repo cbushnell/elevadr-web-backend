@@ -3,9 +3,10 @@ from zat.log_to_dataframe import LogToDataFrame
 import subprocess
 import os
 from pathlib import Path
-from pandas import pd
+import pandas as pd
+import warnings
 
-from app.utils.utils import (
+from utils import (
     convert_ips,
     convert_ip_to_str,
     get_list_of_manufacturers,
@@ -13,7 +14,9 @@ from app.utils.utils import (
     check_ip_version,
     port_risk,
     port_to_service,
-    protocol_type_processing
+    connection_type_processing,
+    traffic_direction,
+    subnet_membership
 )
 
 class PcapParser():
@@ -30,13 +33,17 @@ class PcapParser():
         self.path_to_zeek_scripts = path_to_zeek_scripts
         self.path_to_assessor_data = path_to_assessor_data
 
+        self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
+
+        # Define the output directory for Zeek logs and report jsons - based on the pcap filename (ex. app/data/zeeks/<pcap_filename>/)
+        self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
+
         # Dataframe which contains the network traffic flow data
         traffic_df_schema = {
             "connection_info.protocol_ver_id": int, # 0 - UNK, 4 - IPv4, 6 - IPv6, 99 - other
-            "connection_info.type": str, # CUSTOM: unicast, multicast, broadcast
-            "connection_info.scope": str, # private, public, link-local, 
-            "connection_info.direction_id": int, # 0 - UNK, 1 - inbound, 2 - outbound, 3 - lateral, 99 - other
-            "connection_info.protocol_name": str, # tcp, udp, other IANA assigned value
+            "connection_info.type_name": str, # CUSTOM: unicast, multicast, broadcast
+            "connection_info.direction_name": str, # None, inbound, outbound, lateral, other
+            "connection_info.protocol_name": str, # tcp, udp, other IANA assigned L4 protocol
             "dst_endpoint.ip": str,
             "dst_endpoint.mac": str, # CONDITIONAL
             "dst_endpoint.port": int, 
@@ -55,48 +62,80 @@ class PcapParser():
         
         # Dataframe which contains device data
         endpoints_df_schema = {
-            "mac": str,
-            "manufacturer": str,
-            "ipv4_ips": str,
-            "ipv6_ips": str, # TODO: Make a column that identifies which
-            "ipv4_subnets": str,
-            "ipv6_subnets": str, # will we ever use this?
-            "device.protocol_ver_id": str # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, [4, 6] - IPv4 and IPv6, 99 - other
+            "device.mac": str,
+            "device.manufacturer": str, # CUSTOM
+            "device.ipv4_ips": str,
+            "device.ipv6_ips": str,
+            "device.ipv4_subnets": str,
+            "device.ipv6_subnets": str, # will we ever use this?
+            "device.protocol_ver_id": int # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
         }
         self.hosts_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
 
+        # Process PCAP using Zeek
+        # self.zeekify() # Uncomment to run processing on previously unprocessed PCAP
 
+        # Convert Zeek conn.log to a pandas data frame
         log_to_df = LogToDataFrame()
         conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
 
+        # print(conn_df)
+
         # Apply mappings for traffic_df
+        conn_df_mappings = {
+            'proto': "connection_info.protocol_name",
+            "id.orig_h": "src_endpoint.ip",
+            "id.orig_p": "src_endpoint.port",
+            "id.resp_h": "dst_endpoint.ip",
+            "id.resp_p": "dst_endpoint.port",
+            "orig_l2_addr": "src_endpoint.mac",
+            "resp_l2_addr": "dst_endpoint.mac"
+        }
         mapped_conn_df = conn_df.rename(
-            columns={
-                "id.orig_h": "src_endpoint.ip",
-                "id.orig_p": "src_endpoint.port",
-                "id.resp_h": "dst_endpoint.ip",
-                "id.resp_p": "dst_endpoint.port",
-                "ip_proto": "connection_info.protocol_id",
-                "orig_l2_addr": "src_endpoint.mac",
-                "resp_l2_addr": "dst_endpoint.mac"
-            }
+            columns=conn_df_mappings
         )
 
-        # Populate "connection_info.protocol_ver" w/ IP version (IPv4 or IPv6)
-        mapped_conn_df["connection_info.protocol_ver_id"] = self.conn_df["src_endpoint.ip"].apply(
+        self.traffic_df = pd.concat([self.traffic_df, mapped_conn_df[conn_df_mappings.values()]])
+
+        ######
+        #
+        #   IP PROCESSING
+        #
+        #####
+
+        #  connection_info.protocol_ver: add IP version (IPv4 or IPv6)
+        self.traffic_df["connection_info.protocol_ver_id"] = self.traffic_df["src_endpoint.ip"].apply(
             check_ip_version
         )
 
-        # Determine the connection type type (ex. multicast) and scope (ex. private)
-        mapped_conn_df["connection_info.type"], mapped_conn_df["connection_info.scope"] = mapped_conn_df["dst_endpoint.ip"].apply(
-            protocol_type_processing
+        # connection_info.type: add the connection type (ex. multicast)
+        self.traffic_df["connection_info.type_name"] = self.traffic_df["dst_endpoint.ip"].apply(
+            connection_type_processing
         )
 
-        self.known_services_df = log_to_df.create_dataframe(
-            Path(self.upload_output_zeek_dir + "/known_services.log")
+        # connection_info.direction_name: add the connection direction (ex. inbound)
+        self.traffic_df["connection_info.direction_name"] = self.traffic_df.apply(
+            traffic_direction,
+            axis=1
         )
+
+        # src_endpoint.subnet and dst_endpoint.subnet: add which subnet the IP is likely a member of
+        self.traffic_df = self.traffic_df.apply(
+            lambda row: subnet_membership(row),
+            axis=1
+        )
+
+        ######
+        #
+        #   SERVICE PROCESSING
+        #
+        #####
+
+        # set: service.name, service.description, service.information_categories, service.risk_categories
+
+        print(self.traffic_df)
 
     def zeekify(self):
         """Execute pcap analysis using Zeek"""
@@ -116,4 +155,14 @@ class PcapParser():
         )
 
 if __name__ == "__main__":
-    pass
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    pd.set_option("display.max_columns", None)
+
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    PcapParser(
+        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/celr_seaport.pcap")),
+        path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
+        path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
+        path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))
+    )
+    
