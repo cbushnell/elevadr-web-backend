@@ -47,7 +47,11 @@ def traffic_direction(row):
         src_ip = ipaddress.ip_address(row["src_endpoint.ip"])
         dst_ip = ipaddress.ip_address(row["dst_endpoint.ip"])
         if src_ip.is_private:
-            if dst_ip.is_private or dst_ip in ipaddress.ip_network("ff00::/8"):
+            if (
+                dst_ip.is_private or
+                dst_ip in ipaddress.ip_network("ff00::/8") or
+                dst_ip in ipaddress.ip_network("224.0.0.0/24")
+            ):
                 direction = "lateral"
             elif dst_ip.is_global:
                 direction = "outbound"
@@ -67,8 +71,8 @@ def traffic_direction(row):
 def subnet_membership(row, known_subnets=[]):
     src_subnet = None
     dst_subnet = None
-    if known_subnets:
-        pass # Functionality not yet available
+    if known_subnets: # TODO: Users provide their known subnets - Functionality not yet available
+        pass 
     else: # Assuming at least /24 subnets
         if row["connection_info.protocol_ver_id"] == 6:
             pass
@@ -77,7 +81,7 @@ def subnet_membership(row, known_subnets=[]):
                 ipaddress.IPv4Address(
                     int(ipaddress.IPv4Address(row["src_endpoint.ip"])) & 4294967040
                 )
-            ) + "/24" # Apply a bitmask to remove the final octet
+            ) + "/24" # Apply a bitmask to remove the final octet`
             if str(row["dst_endpoint.ip"]) != "255.255.255.255":
                 dst_subnet = str(
                     ipaddress.IPv4Address(
@@ -85,8 +89,26 @@ def subnet_membership(row, known_subnets=[]):
                     )
                 ) + "/24" # Apply a bitmask to remove the final octet
             else:
-                dst_subnet = src_subnet
+                dst_subnet = src_subnet # IPv4 local broadcast (255.255.255.255)
     row["src_endpoint.subnet"], row["dst_endpoint.subnet"] = src_subnet, dst_subnet
+    return row
+
+def service_processing(row, ports_df, port_risk_df):
+    port = row["dst_endpoint.port"]
+    try:
+        row["service.name"] = ports_df.loc[port]['Service Name']
+    except Exception as e: # The port is not mapped to a known service
+        # print(e)
+        row["service.name"] = None
+        return row
+    try:
+        port_risk_row = port_risk_df.loc[str(port)]
+        row["service.description"] = port_risk_row['description']
+        row["service.information_categories"] = port_risk_row['information_categories']
+        row["service.risk_categories"] = port_risk_row['risk_categories']
+    except Exception as e: # Port has no associated risk description
+        row["service.description"] = None
+        return row
     return row
 
 def get_list_of_manufacturers(oui_path, row, ics_manufacturers):

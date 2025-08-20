@@ -16,7 +16,8 @@ from utils import (
     port_to_service,
     connection_type_processing,
     traffic_direction,
-    subnet_membership
+    subnet_membership,
+    service_processing
 )
 
 class PcapParser():
@@ -38,6 +39,28 @@ class PcapParser():
         # Define the output directory for Zeek logs and report jsons - based on the pcap filename (ex. app/data/zeeks/<pcap_filename>/)
         self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
 
+        # Load Assessor data - external datasets to enrich pcap data:
+        # Load ports information
+        self.ports_df = None 
+        try:
+            ports_json_p = str(Path(path_to_assessor_data, "ports.json"))
+            with open(str(Path(ports_json_p)), "r") as f:
+                self.ports_df = pd.read_json(f, orient="index")
+        except Exception as e:
+            print(e)
+            quit()
+
+        # Load service risk information
+        self.port_risk_df = None
+        try:
+            port_risk_json_p = str(Path(path_to_assessor_data, "port_risk.json"))
+            with open(str(Path(port_risk_json_p)), "r") as f:
+                self.port_risk_df = pd.read_json(f, orient="index")
+        except Exception as e:
+            print(e)
+            quit()
+
+        # Establish core PcapAnalyzer data frames
         # Dataframe which contains the network traffic flow data
         traffic_df_schema = {
             "connection_info.protocol_ver_id": int, # 0 - UNK, 4 - IPv4, 6 - IPv6, 99 - other
@@ -80,8 +103,6 @@ class PcapParser():
         conn_df = log_to_df.create_dataframe(
             str(Path(self.upload_output_zeek_dir + "/conn.log"))
         )
-
-        # print(conn_df)
 
         # Apply mappings for traffic_df
         conn_df_mappings = {
@@ -135,7 +156,11 @@ class PcapParser():
 
         # set: service.name, service.description, service.information_categories, service.risk_categories
 
-        print(self.traffic_df)
+        self.traffic_df = self.traffic_df.apply(
+            lambda row: service_processing(row, self.ports_df, self.port_risk_df),
+            axis=1
+        )
+
 
     def zeekify(self):
         """Execute pcap analysis using Zeek"""
@@ -159,10 +184,12 @@ if __name__ == "__main__":
     pd.set_option("display.max_columns", None)
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    PcapParser(
-        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/celr_seaport.pcap")),
+    pcap_parser = PcapParser(
+        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/CR1_6.pcap")),
         path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
         path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
         path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))
     )
+    pcap_parser.traffic_df.to_csv(str(Path(Path(__file__).resolve().parent.parent.parent, "temp.csv")))
+
     
