@@ -49,8 +49,8 @@ def traffic_direction(row):
         if src_ip.is_private:
             if (
                 dst_ip.is_private or
-                dst_ip in ipaddress.ip_network("ff00::/8") or
-                dst_ip in ipaddress.ip_network("224.0.0.0/24")
+                dst_ip in ipaddress.ip_network("ff00::/8") or # IPv6 multicast - incorrectly is_private: False
+                dst_ip in ipaddress.ip_network("224.0.0.0/24") # IPv4 local multicast - incorrectly is_private: False
             ):
                 direction = "lateral"
             elif dst_ip.is_global:
@@ -110,6 +110,63 @@ def service_processing(row, ports_df, port_risk_df):
         row["service.description"] = None
         return row
     return row
+
+def get_macs(row: pd.Series):
+    dst_mac, src_mac = None, None
+    src_mac = row['src_endpoint.mac']
+    if row["connection_info.type_name"] == "unicast":
+        dst_mac = row['dst_endpoint.mac']
+    return [src_mac, dst_mac]
+
+def get_endpoint_ip_data(row, endpoints_df):
+    # Source MAC
+    src_mac = row["src_endpoint.mac"]
+    if src_mac in endpoints_df.index:
+        src_ip_ver = None
+        if row['connection_info.protocol_ver_id'] == 4:
+            endpoints_df.at[src_mac, "device.ipv4_ips"] = row["src_endpoint.ip"]
+            endpoints_df.at[src_mac, "device.ipv4_subnets"] = row["src_endpoint.subnet"]
+            src_ip_ver = 4
+        else:
+            endpoints_df.at[src_mac, "device.ipv6_ips"] = row["src_endpoint.ip"]
+            src_ip_ver = 6
+        if (
+            not pd.isna(endpoints_df.loc[src_mac, "device.ipv4_ips"]) and
+            not pd.isna(endpoints_df.loc[src_mac, "device.ipv6_ips"]) 
+        ):
+            endpoints_df.at[src_mac, "device.protocol_ver_id"] = 46
+        else:
+            endpoints_df.at[src_mac, "device.protocol_ver_id"] = src_ip_ver
+        if ipaddress.ip_address(row["src_endpoint.ip"]).is_global:
+            endpoints_df.at[src_mac, "device.ip_scope"] = "global"
+        else:
+            endpoints_df.at[src_mac, "device.ip_scope"] = "private"
+
+    # Destination MAC
+    dst_mac = row["dst_endpoint.mac"]
+    if dst_mac in endpoints_df.index:
+        dst_ip_ver = None
+        if row['connection_info.protocol_ver_id'] == 4:
+            endpoints_df.at[dst_mac, "device.ipv4_ips"] = row["dst_endpoint.ip"]
+            endpoints_df.at[dst_mac, "device.ipv4_subnets"] = row["dst_endpoint.subnet"]
+            dst_ip_ver = 4
+        else:
+            endpoints_df.at[dst_mac, "device.ipv6_ips"] = row["dst_endpoint.ip"]
+            dst_ip_ver = 6
+        if (
+                not pd.isna(endpoints_df.loc[dst_mac, "device.ipv4_ips"]) and
+                not pd.isna(endpoints_df.loc[dst_mac, "device.ipv6_ips"])
+        ):
+            print(endpoints_df.loc[dst_mac, "device.ipv4_ips"])
+            print(endpoints_df.loc[dst_mac, "device.ipv6_ips"])
+            endpoints_df.at[dst_mac, "device.protocol_ver_id"] = 46
+        else:
+            endpoints_df.at[dst_mac, "device.protocol_ver_id"] = dst_ip_ver
+        if ipaddress.ip_address(row["dst_endpoint.ip"]).is_global:
+            endpoints_df.at[dst_mac, "device.ip_scope"] = "global"
+        else:
+            endpoints_df.at[dst_mac, "device.ip_scope"] = "private"
+
 
 def get_list_of_manufacturers(oui_path, row, ics_manufacturers):
     """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""

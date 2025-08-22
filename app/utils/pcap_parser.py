@@ -17,7 +17,9 @@ from utils import (
     connection_type_processing,
     traffic_direction,
     subnet_membership,
-    service_processing
+    service_processing,
+    get_macs,
+    get_endpoint_ip_data
 )
 
 class PcapParser():
@@ -89,11 +91,13 @@ class PcapParser():
             "device.manufacturer": str, # CUSTOM
             "device.ipv4_ips": str,
             "device.ipv6_ips": str,
+            "device.ip_scope": str, # CUSTOM: private or global
             "device.ipv4_subnets": str,
             "device.ipv6_subnets": str, # will we ever use this?
             "device.protocol_ver_id": int # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
+            #TODO: Add outgoing and incoming services
         }
-        self.hosts_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
+        self.endpoints_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
 
         # Process PCAP using Zeek
         # self.zeekify() # Uncomment to run processing on previously unprocessed PCAP
@@ -155,12 +159,33 @@ class PcapParser():
         #####
 
         # set: service.name, service.description, service.information_categories, service.risk_categories
-
         self.traffic_df = self.traffic_df.apply(
             lambda row: service_processing(row, self.ports_df, self.port_risk_df),
             axis=1
         )
 
+        ######
+        #
+        #   ENDPOINT PROCESSING
+        #
+        #####
+
+        macs = self.traffic_df.apply(
+            get_macs,
+            axis=1
+        )
+        macs_df = pd.DataFrame.from_records(macs, columns=["src_mac", "dst_mac"])
+        macs_df = pd.concat([macs_df['src_mac'], macs_df['dst_mac']]).dropna()
+        self.endpoints_df['device.mac'] = pd.unique(macs_df)
+        self.endpoints_df = self.endpoints_df.set_index('device.mac')
+        
+        self.traffic_df.apply(
+            lambda row: get_endpoint_ip_data(
+                row, endpoints_df=self.endpoints_df
+            ),
+            axis=1
+        )
+        print(self.endpoints_df)
 
     def zeekify(self):
         """Execute pcap analysis using Zeek"""
@@ -190,6 +215,5 @@ if __name__ == "__main__":
         path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
         path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))
     )
-    pcap_parser.traffic_df.to_csv(str(Path(Path(__file__).resolve().parent.parent.parent, "temp.csv")))
 
     
