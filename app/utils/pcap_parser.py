@@ -9,7 +9,6 @@ import warnings
 from utils import (
     convert_ips,
     convert_ip_to_str,
-    get_list_of_manufacturers,
     load_consts,
     check_ip_version,
     port_risk,
@@ -19,7 +18,8 @@ from utils import (
     subnet_membership,
     service_processing,
     get_macs,
-    get_endpoint_ip_data
+    get_endpoint_ip_data,
+    set_manufacturers
 )
 
 class PcapParser():
@@ -62,6 +62,20 @@ class PcapParser():
             print(e)
             quit()
 
+        # Load manufacturer information
+        manufacturers_df = None
+        try:
+            manufacturers_json_p = str(Path(path_to_assessor_data, "latest_oui_lookup.json"))
+            with open(str(Path(manufacturers_json_p)), "r") as f:
+                manufacturers_df = pd.read_json(f, orient="index")
+            manufacturers_df.index = manufacturers_df.index.rename("oui")
+            manufacturers_df = manufacturers_df.rename(
+                columns={0: "manufacturer"}
+            )
+        except Exception as e:
+            print(e)
+            quit()
+
         # Establish core PcapAnalyzer data frames
         # Dataframe which contains the network traffic flow data
         traffic_df_schema = {
@@ -69,6 +83,7 @@ class PcapParser():
             "connection_info.type_name": str, # CUSTOM: unicast, multicast, broadcast
             "connection_info.direction_name": str, # None, inbound, outbound, lateral, other
             "connection_info.protocol_name": str, # tcp, udp, other IANA assigned L4 protocol
+            "connection_info.activity_name": str,
             "dst_endpoint.ip": str,
             "dst_endpoint.mac": str, # CONDITIONAL
             "dst_endpoint.port": int, 
@@ -116,7 +131,8 @@ class PcapParser():
             "id.resp_h": "dst_endpoint.ip",
             "id.resp_p": "dst_endpoint.port",
             "orig_l2_addr": "src_endpoint.mac",
-            "resp_l2_addr": "dst_endpoint.mac"
+            "resp_l2_addr": "dst_endpoint.mac",
+            "conn_state": "connection_info.activity_name"
         }
         mapped_conn_df = conn_df.rename(
             columns=conn_df_mappings
@@ -185,7 +201,30 @@ class PcapParser():
             ),
             axis=1
         )
+
+        self.endpoints_df = self.endpoints_df.apply(
+            lambda row: set_manufacturers(row, manufacturers_df),
+            axis=1
+        )
+
+        successful_connections = self.traffic_df[self.traffic_df["connection_info.activity_name"].isin(["S1", "SF", "S2", "S3", "RSTO"])]
+        outgoing_service_df = successful_connections.groupby("src_endpoint.mac").agg({"service.name": lambda x: set(x)})
+        outgoing_service_df = outgoing_service_df.rename(columns={"service.name": "device.outgoing_services"})
+        incoming_service_df = successful_connections.groupby("dst_endpoint.mac").agg({"service.name": lambda x: set(x)})
+        incoming_service_df = incoming_service_df.rename(columns={"service.name": "device.incoming_services"})
+
+        self.endpoints_df = self.endpoints_df.join(
+            incoming_service_df,
+            how="left"
+        )
+
+        self.endpoints_df = self.endpoints_df.join(
+            outgoing_service_df,
+            how="left"
+        )
+
         print(self.endpoints_df)
+
 
     def zeekify(self):
         """Execute pcap analysis using Zeek"""
@@ -210,7 +249,7 @@ if __name__ == "__main__":
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
     pcap_parser = PcapParser(
-        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/CR1_6.pcap")),
+        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/capture.pcap")),
         path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
         path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
         path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))

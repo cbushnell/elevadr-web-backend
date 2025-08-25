@@ -167,24 +167,16 @@ def get_endpoint_ip_data(row, endpoints_df):
         else:
             endpoints_df.at[dst_mac, "device.ip_scope"] = "private"
 
-
-def get_list_of_manufacturers(oui_path, row, ics_manufacturers):
-    """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""
-    with open(oui_path) as f:
-        oui_lookup = json.load(f)
-    # load pcap
-    mac_addr = row["orig_l2_addr"]
-    oui = mac_addr[0:8].replace(":", "-").upper()
+def set_manufacturers(row: pd.Series, manufacturers_df) -> pd.Series:
+    oui = row.name[:8]
+    oui_formatted = oui.replace(":", "-").upper()
     try:
-        manufacturer = oui_lookup[oui]
+        row['device.manufacturer'] = manufacturers_df.loc[oui_formatted]['manufacturer']
+        return row
     except:
-        return None
-    for man in ics_manufacturers:
-        if man in manufacturer:
-            return manufacturer
-
-    return None
-
+        return row
+    
+#### LEGACY BELOW ####
 
 def load_consts(consts_path):
     with open(consts_path) as f:
