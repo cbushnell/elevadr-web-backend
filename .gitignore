@@ -187,6 +187,7 @@ zeeks/
 
 # Exploratory Work
 *.ipynb
+.temp/
 
 # VSCode
 .vscode/

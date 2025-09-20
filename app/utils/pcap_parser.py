@@ -1,3 +1,5 @@
+# TODO: Switch Nones to np.na's for pandas consistency
+
 from zat.log_to_dataframe import LogToDataFrame
 
 import subprocess
@@ -19,7 +21,9 @@ from utils import (
     service_processing,
     get_macs,
     get_endpoint_ip_data,
-    set_manufacturers
+    set_manufacturers,
+    is_using_ot_services,
+    is_communicating_with_ot_hosts
 )
 
 class PcapParser():
@@ -100,20 +104,6 @@ class PcapParser():
         }
         self.traffic_df = pd.DataFrame(columns=traffic_df_schema.keys()).astype(traffic_df_schema)
         
-        # Dataframe which contains device data
-        endpoints_df_schema = {
-            "device.mac": str,
-            "device.manufacturer": str, # CUSTOM
-            "device.ipv4_ips": str,
-            "device.ipv6_ips": str,
-            "device.ip_scope": str, # CUSTOM: private or global
-            "device.ipv4_subnets": str,
-            "device.ipv6_subnets": str, # will we ever use this?
-            "device.protocol_ver_id": int # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
-            #TODO: Add outgoing and incoming services
-        }
-        self.endpoints_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
-
         # Process PCAP using Zeek
         # self.zeekify() # Uncomment to run processing on previously unprocessed PCAP
 
@@ -186,6 +176,25 @@ class PcapParser():
         #
         #####
 
+        # Dataframe which contains device data
+        endpoints_df_schema = {
+            "device.mac": str,
+            "device.manufacturer": str, # CUSTOM
+            "device.is_ot": bool,
+            "device.ipv4_ips": str,
+            "device.ipv6_ips": str,
+            "device.ip_scope": str, # CUSTOM: private or global
+            "device.ipv4_subnets": str,
+            "device.ipv6_subnets": str, # will we ever use this?
+            "device.protocol_ver_id": int, # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
+            "device.dst_services": object,
+            "device.incoming_services": object,
+            "device.dst_ports": object,
+            "device.incoming_ports": object,
+        }
+        self.endpoints_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
+
+        # device.mac: collect device mac addresses from the traffic_df
         macs = self.traffic_df.apply(
             get_macs,
             axis=1
@@ -195,35 +204,87 @@ class PcapParser():
         self.endpoints_df['device.mac'] = pd.unique(macs_df)
         self.endpoints_df = self.endpoints_df.set_index('device.mac')
         
+        # device.ipv4_ips, device.ipv6_ips, device.ip_scope, device.ipv4_subnets, device.ipv6_subnets, device.protocol_ver_id: collect ip information for each device from traffic_df
         self.traffic_df.apply(
             lambda row: get_endpoint_ip_data(
                 row, endpoints_df=self.endpoints_df
             ),
             axis=1
         )
-
         self.endpoints_df = self.endpoints_df.apply(
             lambda row: set_manufacturers(row, manufacturers_df),
             axis=1
         )
 
-        successful_connections = self.traffic_df[self.traffic_df["connection_info.activity_name"].isin(["S1", "SF", "S2", "S3", "RSTO"])]
-        outgoing_service_df = successful_connections.groupby("src_endpoint.mac").agg({"service.name": lambda x: set(x)})
-        outgoing_service_df = outgoing_service_df.rename(columns={"service.name": "device.outgoing_services"})
-        incoming_service_df = successful_connections.groupby("dst_endpoint.mac").agg({"service.name": lambda x: set(x)})
-        incoming_service_df = incoming_service_df.rename(columns={"service.name": "device.incoming_services"})
+        # Adding service/port activity associated with the local endpoint
+        # Filter for successful connection
+        successful_connections = self.traffic_df[self.traffic_df["connection_info.activity_name"].isin(["S0", "S1", "SF", "S2", "S3", "RSTO"])]
 
-        self.endpoints_df = self.endpoints_df.join(
+        # device.incoming_services
+        incoming_service_df = successful_connections.groupby("dst_endpoint.ip").agg({"service.name": lambda x: set(x)})
+        incoming_service_df = incoming_service_df.rename(columns={"service.name": "device.incoming_services"})
+        self.endpoints_df = self.endpoints_df.merge(
             incoming_service_df,
-            how="left"
+            left_on="device.ipv4_ips",
+            right_index=True,
+            how="left",
+        )
+        self.endpoints_df = self.endpoints_df.drop("device.incoming_services_x", axis=1)
+        self.endpoints_df = self.endpoints_df.rename(columns={"device.incoming_services_y": "device.incoming_services"})
+
+        # device.incoming_ports
+        incoming_port_df = successful_connections.groupby("dst_endpoint.ip").agg({"dst_endpoint.port": lambda x: set(x)})
+        incoming_port_df = incoming_port_df.rename(columns={"dst_endpoint.port": "device.incoming_ports"})
+        self.endpoints_df = self.endpoints_df.merge(
+            incoming_port_df,
+            left_on="device.ipv4_ips",
+            right_index=True,
+            how="left",
+        )
+        self.endpoints_df = self.endpoints_df.drop("device.incoming_ports_x", axis=1)
+        self.endpoints_df = self.endpoints_df.rename(columns={"device.incoming_ports_y": "device.incoming_ports"})
+
+        # device.dst_services
+        dst_service_df = successful_connections.groupby("src_endpoint.ip").agg({"service.name": lambda x: set(x)})
+        dst_service_df = dst_service_df.rename(columns={"service.name": "device.dst_services"})
+        self.endpoints_df = self.endpoints_df.merge(
+            dst_service_df,
+            left_on="device.ipv4_ips",
+            right_index=True,
+            how="left",
+        )
+        self.endpoints_df = self.endpoints_df.drop("device.dst_services_x", axis=1)
+        self.endpoints_df = self.endpoints_df.rename(columns={"device.dst_services_y": "device.dst_services"})
+
+        # device.dst_ports
+        dst_port_df = successful_connections.groupby("src_endpoint.ip").agg({"dst_endpoint.port": lambda x: set(x)})
+        dst_port_df = dst_port_df.rename(columns={"dst_endpoint.port": "device.dst_ports"})
+        self.endpoints_df = self.endpoints_df.merge(
+            dst_port_df,
+            left_on="device.ipv4_ips",
+            right_index=True,
+            how="left",
+        )
+        self.endpoints_df = self.endpoints_df.drop("device.dst_ports_x", axis=1)
+        self.endpoints_df = self.endpoints_df.rename(columns={"device.dst_ports_y": "device.dst_ports"})
+
+        # device.is_ot: set True or False based on whether the device has communicated on an industrial protocol
+        self.endpoints_df['device.is_ot'] = self.endpoints_df.apply(
+            lambda row: is_using_ot_services(row, self.traffic_df),
+            axis=1
         )
 
-        self.endpoints_df = self.endpoints_df.join(
-            outgoing_service_df,
-            how="left"
+        # check for connections between known OT hosts and devices they're communicating with - even if not over OT protocols
+        ot_ips = set(self.endpoints_df[self.endpoints_df['device.is_ot']]['device.ipv4_ips'])
+        self.endpoints_df = self.endpoints_df.apply(
+            lambda row: is_communicating_with_ot_hosts(row, self.traffic_df, ot_ips),
+            axis=1
         )
 
         print(self.endpoints_df)
+        self.endpoints_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/endpoints_tmp.csv")
+        self.traffic_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/traffic_tmp.csv")
+
 
 
     def zeekify(self):
@@ -243,13 +304,24 @@ class PcapParser():
             ]
         )
 
+        # Run "mac_logging" Zeek script
+        subprocess.check_output(
+            [
+                "zeek",
+                "-r",
+                self.path_to_pcap,
+                Path(self.path_to_zeek_scripts, "mac_logging.zeek"),
+                f"Log::default_logdir={self.upload_output_zeek_dir}",
+            ]
+        )
+
 if __name__ == "__main__":
     warnings.filterwarnings("ignore", category=FutureWarning)
     pd.set_option("display.max_columns", None)
 
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
     pcap_parser = PcapParser(
-        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/capture.pcap")),
+        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/CR1_6.pcap")),
         path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
         path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
         path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))

@@ -175,6 +175,24 @@ def set_manufacturers(row: pd.Series, manufacturers_df) -> pd.Series:
         return row
     except:
         return row
+
+# TODO: Improve "port_risk" informed service mapping
+def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> pd.Series:
+    ip = row['device.ipv4_ips']
+    device_traffic_df = traffic_df[(traffic_df['src_endpoint.ip'] == ip) | (traffic_df['dst_endpoint.ip'] == ip)]
+    ics = device_traffic_df['service.information_categories'].dropna()
+    for ic in ics:
+        if "Industrial Protocol" in ic:
+            return True
+            print(True)
+    return False
+
+def is_communicating_with_ot_hosts(row: pd.Series, traffic_df: pd.DataFrame, ot_ips: set) -> pd.Series:
+    ip = row['device.ipv4_ips']
+    device_traffic_df = set(traffic_df[traffic_df['src_endpoint.ip'] == ip]['dst_endpoint.ip']) | set(traffic_df[traffic_df['dst_endpoint.ip'] == ip]['src_endpoint.ip'])
+    if not row['device.is_ot']:
+        row['device.is_ot'] = True if len(device_traffic_df.intersection(ot_ips)) > 0 else False
+    return row
     
 #### LEGACY BELOW ####
 
