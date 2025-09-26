@@ -2,13 +2,17 @@
 
 from zat.log_to_dataframe import LogToDataFrame
 
+from functools import lru_cache
+
+from collections import Counter
+
 import subprocess
 import os
 from pathlib import Path
 import pandas as pd
 import warnings
 
-from utils import (
+from .utils import (
     convert_ips,
     convert_ip_to_str,
     load_consts,
@@ -23,62 +27,23 @@ from utils import (
     get_endpoint_ip_data,
     set_manufacturers,
     is_using_ot_services,
-    is_communicating_with_ot_hosts
+    is_communicating_with_ot_hosts,
+    convert_list_col_to_str,
+    FilePathInfo
 )
 
 class PcapParser():
 
     def __init__(
         self,
-        path_to_pcap=None,
-        path_to_zeek=None,
-        path_to_zeek_scripts=None,
-        path_to_assessor_data=None,
+        file_path_info
     ):
-        self.path_to_pcap = path_to_pcap
-        self.path_to_zeek = path_to_zeek
-        self.path_to_zeek_scripts = path_to_zeek_scripts
-        self.path_to_assessor_data = path_to_assessor_data
+        self.file_path_info = file_path_info
 
-        self.pcap_filename = self.path_to_pcap.split("/")[-1].split(".")[0]
+        self.pcap_filename = self.file_path_info.path_to_pcap.split("/")[-1].split(".")[0]
 
         # Define the output directory for Zeek logs and report jsons - based on the pcap filename (ex. app/data/zeeks/<pcap_filename>/)
-        self.upload_output_zeek_dir = str(Path(self.path_to_zeek, self.pcap_filename))
-
-        # Load Assessor data - external datasets to enrich pcap data:
-        # Load ports information
-        self.ports_df = None 
-        try:
-            ports_json_p = str(Path(path_to_assessor_data, "ports.json"))
-            with open(str(Path(ports_json_p)), "r") as f:
-                self.ports_df = pd.read_json(f, orient="index")
-        except Exception as e:
-            print(e)
-            quit()
-
-        # Load service risk information
-        self.port_risk_df = None
-        try:
-            port_risk_json_p = str(Path(path_to_assessor_data, "port_risk.json"))
-            with open(str(Path(port_risk_json_p)), "r") as f:
-                self.port_risk_df = pd.read_json(f, orient="index")
-        except Exception as e:
-            print(e)
-            quit()
-
-        # Load manufacturer information
-        manufacturers_df = None
-        try:
-            manufacturers_json_p = str(Path(path_to_assessor_data, "latest_oui_lookup.json"))
-            with open(str(Path(manufacturers_json_p)), "r") as f:
-                manufacturers_df = pd.read_json(f, orient="index")
-            manufacturers_df.index = manufacturers_df.index.rename("oui")
-            manufacturers_df = manufacturers_df.rename(
-                columns={0: "manufacturer"}
-            )
-        except Exception as e:
-            print(e)
-            quit()
+        self.upload_output_zeek_dir = str(Path(self.file_path_info.path_to_zeek, self.pcap_filename))
 
         # Establish core PcapAnalyzer data frames
         # Dataframe which contains the network traffic flow data
@@ -132,6 +97,90 @@ class PcapParser():
 
         ######
         #
+        #   ENDPOINT PROCESSING
+        #
+        #####
+
+        # Dataframe which contains device data
+        endpoints_df_schema = {
+            "device.mac": str,
+            "device.manufacturer": str, # CUSTOM
+            "device.is_ot": bool,
+            "device.ipv4_ips": str,
+            "device.ipv6_ips": str,
+            "device.ip_scope": str, # CUSTOM: private or global
+            "device.ipv4_subnets": str,
+            "device.ipv6_subnets": str, # will we ever use this?
+            "device.protocol_ver_id": int, # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
+            "device.dst_services": object,
+            "device.incoming_services": object,
+            "device.dst_ports": object,
+            "device.incoming_ports": object,
+        }
+        self.endpoints_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
+
+        ######
+        #
+        #   SERVICES PROCESSING
+        #
+        #####
+
+        # Dataframe which contains service data
+        services_df_schema = {
+            "service.name": str, # CUSTOM
+            "service.description": str, # CUSTOM
+            "service.information_categories": str, # CUSTOM
+            "service.risk_categories": str # CUSTOM
+        }
+        self.services_df = pd.DataFrame(columns=services_df_schema.keys()).astype(services_df_schema)
+
+
+
+    def zeekify(self):
+        """Execute pcap analysis using Zeek"""
+
+        # Make a new subdirectory for the pcap analysis based on pcap name
+        if not os.path.isdir(self.file_path_info.upload_output_zeek_dir):
+            os.mkdir(self.file_path_info.upload_output_zeek_dir)
+
+        # Run default Zeek processing
+        subprocess.check_output(
+            [
+                "zeek",
+                "-r",
+                self.file_path_info.path_to_pcap,
+                f"Log::default_logdir={self.file_path_info.upload_output_zeek_dir}",
+            ]
+        )
+
+        # Run "mac_logging" Zeek script
+        subprocess.check_output(
+            [
+                "zeek",
+                "-r",
+                self.file_path_info.path_to_pcap,
+                Path(self.file_path_info.path_to_zeek_scripts, "mac_logging.zeek"),
+                f"Log::default_logdir={self.file_path_info.upload_output_zeek_dir}",
+            ]
+        )
+
+class Analyzer:
+
+    def __init__(self, traffic_df: pd.DataFrame, endpoints_df: pd.DataFrame, services_df: pd.DataFrame, file_path_info: FilePathInfo):
+        self.traffic_df = traffic_df
+        self.endpoints_df = endpoints_df
+        self.services_df = services_df
+        self.file_path_info = file_path_info
+
+        self.get_assessor_data()
+        self.traffic_df_processing()
+        self.endpoints_df_processing()
+        self.services_df_processing()
+
+    def traffic_df_processing(self):
+
+        ######
+        #
         #   IP PROCESSING
         #
         #####
@@ -170,29 +219,7 @@ class PcapParser():
             axis=1
         )
 
-        ######
-        #
-        #   ENDPOINT PROCESSING
-        #
-        #####
-
-        # Dataframe which contains device data
-        endpoints_df_schema = {
-            "device.mac": str,
-            "device.manufacturer": str, # CUSTOM
-            "device.is_ot": bool,
-            "device.ipv4_ips": str,
-            "device.ipv6_ips": str,
-            "device.ip_scope": str, # CUSTOM: private or global
-            "device.ipv4_subnets": str,
-            "device.ipv6_subnets": str, # will we ever use this?
-            "device.protocol_ver_id": int, # CUSTOM: 0 - UNK, 4 - IPv4, 6 - IPv6, 46 - IPv4 and IPv6, 99 - other
-            "device.dst_services": object,
-            "device.incoming_services": object,
-            "device.dst_ports": object,
-            "device.incoming_ports": object,
-        }
-        self.endpoints_df = pd.DataFrame(columns=endpoints_df_schema.keys()).astype(endpoints_df_schema)
+    def endpoints_df_processing(self):
 
         # device.mac: collect device mac addresses from the traffic_df
         macs = self.traffic_df.apply(
@@ -212,7 +239,7 @@ class PcapParser():
             axis=1
         )
         self.endpoints_df = self.endpoints_df.apply(
-            lambda row: set_manufacturers(row, manufacturers_df),
+            lambda row: set_manufacturers(row, self.manufacturers_df),
             axis=1
         )
 
@@ -281,50 +308,107 @@ class PcapParser():
             axis=1
         )
 
-        print(self.endpoints_df)
         self.endpoints_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/endpoints_tmp.csv")
         self.traffic_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/traffic_tmp.csv")
 
+    def get_assessor_data(self):
+        # Load Assessor data - external datasets to enrich pcap data:
+        # Load ports information
+        self.ports_df = None 
+        try:
+            ports_json_p = str(Path(self.file_path_info.path_to_assessor_data, "ports.json"))
+            with open(str(Path(ports_json_p)), "r") as f:
+                self.ports_df = pd.read_json(f, orient="index")
+        except Exception as e:
+            print(e)
+            quit()
+
+        # Load service risk information
+        self.port_risk_df = None
+        try:
+            port_risk_json_p = str(Path(self.file_path_info.path_to_assessor_data, "port_risk.json"))
+            with open(str(Path(port_risk_json_p)), "r") as f:
+                self.port_risk_df = pd.read_json(f, orient="index")
+        except Exception as e:
+            print(e)
+            quit()
+
+        # Load manufacturer information
+        self.manufacturers_df = None
+        try:
+            manufacturers_json_p = str(Path(self.file_path_info.path_to_assessor_data, "latest_oui_lookup.json"))
+            with open(str(Path(manufacturers_json_p)), "r") as f:
+                manufacturers_df = pd.read_json(f, orient="index")
+            manufacturers_df.index = manufacturers_df.index.rename("oui")
+            self.manufacturers_df = manufacturers_df.rename(
+                columns={0: "manufacturer"}
+            )
+        except Exception as e:
+            print(e)
+            quit()
+
+    def services_df_processing(self):
+
+        self.services_df = self.traffic_df[self.services_df.columns]
+        info_categories = self.services_df.apply(lambda x: convert_list_col_to_str(x, "service.information_categories"), axis=1)
+        risk_categories = info_categories.apply(lambda x: convert_list_col_to_str(x, "service.risk_categories"), axis=1)
+        self.services_df = risk_categories.drop_duplicates(keep="first")
+
+    #######
+    #
+    # Report Analysis
+    #
+    #######
+
+    #######
+    #
+    # Endpoints
+    #
+    #######
+
+    # TODO: Do we count this regardless of whether it is source or destination?
+    @lru_cache
+    def ot_cross_segment_communication_count(self) -> int:
+        ot_endpoints_set = set(self.endpoints_df[self.endpoints_df['device.is_ot']].index)
+        cross_segment_macs_df = self.traffic_df[self.traffic_df["dst_endpoint.subnet"] != self.traffic_df["src_endpoint.subnet"]][["src_endpoint.mac", "dst_endpoint.mac"]]
+        cross_segment_macs_set = set(pd.concat([cross_segment_macs_df["src_endpoint.mac"], cross_segment_macs_df["dst_endpoint.mac"]]).unique())
+        return len(ot_endpoints_set.intersection(cross_segment_macs_set))
+    
+    #######
+    #
+    # Traffic
+    #
+    #######
+
+    def service_counts_in_traffic(self) -> dict:
+        named_service_counts = self.traffic_df['service.name'].value_counts().to_dict()
+        unnamed_service_counts = self.traffic_df[pd.isna(self.traffic_df["service.name"])]['dst_endpoint.port'].value_counts().to_dict()
+        return {
+            "known_services": named_service_counts,
+            "unknown_services": unnamed_service_counts
+        }
+
+    #######
+    #
+    # Services
+    #
+    #######
+
+    def service_category_map(self, category) -> dict:
+        category_map = {}
+        for _, row in self.services_df.iterrows():
+            categories = row[category]
+            if type(categories) == str:
+                categories_list = [x for x in categories.split(", ")]
+                for c in categories_list:
+                    new_value = category_map.get(c, [])
+                    new_value.append(row['service.name'])
+                    category_map[c] = new_value
+        return category_map
 
 
-    def zeekify(self):
-        """Execute pcap analysis using Zeek"""
 
-        # Make a new subdirectory for the pcap analysis based on pcap name
-        if not os.path.isdir(self.upload_output_zeek_dir):
-            os.mkdir(self.upload_output_zeek_dir)
 
-        # Run default Zeek processing
-        subprocess.check_output(
-            [
-                "zeek",
-                "-r",
-                self.path_to_pcap,
-                f"Log::default_logdir={self.upload_output_zeek_dir}",
-            ]
-        )
 
-        # Run "mac_logging" Zeek script
-        subprocess.check_output(
-            [
-                "zeek",
-                "-r",
-                self.path_to_pcap,
-                Path(self.path_to_zeek_scripts, "mac_logging.zeek"),
-                f"Log::default_logdir={self.upload_output_zeek_dir}",
-            ]
-        )
-
-if __name__ == "__main__":
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    pd.set_option("display.max_columns", None)
-
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    pcap_parser = PcapParser(
-        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/CR1_6.pcap")),
-        path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
-        path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
-        path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))
-    )
 
     

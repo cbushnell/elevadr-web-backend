@@ -2,6 +2,22 @@ import ipaddress
 import json
 import yaml
 import pandas as pd
+import numpy as np
+from collections import Counter
+
+class FilePathInfo:
+    
+    def __init__(
+        self,
+        path_to_pcap=None,
+        path_to_zeek=None,
+        path_to_zeek_scripts=None,
+        path_to_assessor_data=None,
+    ):
+        self.path_to_pcap = path_to_pcap
+        self.path_to_zeek = path_to_zeek
+        self.path_to_zeek_scripts = path_to_zeek_scripts
+        self.path_to_assessor_data = path_to_assessor_data
 
 def convert_ips(ip):
     try:
@@ -175,6 +191,14 @@ def set_manufacturers(row: pd.Series, manufacturers_df) -> pd.Series:
         return row
     except:
         return row
+    
+def convert_list_col_to_str(row, column_name):
+    row_val = row[column_name]
+    if type(row_val) == list:
+        row_val_str = ", ".join(row_val)
+        row[column_name] = row_val_str
+        return row
+    return row
 
 # TODO: Improve "port_risk" informed service mapping
 def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> pd.Series:
@@ -193,6 +217,15 @@ def is_communicating_with_ot_hosts(row: pd.Series, traffic_df: pd.DataFrame, ot_
     if not row['device.is_ot']:
         row['device.is_ot'] = True if len(device_traffic_df.intersection(ot_ips)) > 0 else False
     return row
+
+def count_values_in_list_column(df, column):
+    counter = Counter()
+    for _, row in df.iterrows():
+        risks = row[column]
+        if type(risks) == str:
+            risk_list = [x for x in risks.split(", ")]
+            counter.update(risk_list)
+    return dict(counter)
     
 #### LEGACY BELOW ####
 
