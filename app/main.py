@@ -2,6 +2,7 @@ import warnings
 
 import pandas as pd
 from pathlib import Path
+import json
 
 from utils.analysis import (
     FilePathInfo,
@@ -11,6 +12,7 @@ from utils.analysis import (
 from utils.report import (
     Report
 )
+
 
 if __name__ == "__main__":
 
@@ -38,3 +40,5 @@ if __name__ == "__main__":
     )
 
     #### Testing report modules ###
+    string = json.dumps(report.data, indent=4)
+    # print(string)

@@ -184,7 +184,7 @@ def get_endpoint_ip_data(row, endpoints_df):
             endpoints_df.at[dst_mac, "device.ip_scope"] = "private"
 
 def set_manufacturers(row: pd.Series, manufacturers_df) -> pd.Series:
-    oui = row.name[:8]
+    oui = row['device.mac'][:8]
     oui_formatted = oui.replace(":", "-").upper()
     try:
         row['device.manufacturer'] = manufacturers_df.loc[oui_formatted]['manufacturer']
@@ -202,7 +202,7 @@ def convert_list_col_to_str(row, column_name):
 
 # TODO: Improve "port_risk" informed service mapping
 def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> pd.Series:
-    ip = row['device.ipv4_ips']
+    ip = row['device.ipv4_ip']
     device_traffic_df = traffic_df[(traffic_df['src_endpoint.ip'] == ip) | (traffic_df['dst_endpoint.ip'] == ip)]
     ics = device_traffic_df['service.information_categories'].dropna()
     for ic in ics:
@@ -212,7 +212,7 @@ def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> pd.Series:
     return False
 
 def is_communicating_with_ot_hosts(row: pd.Series, traffic_df: pd.DataFrame, ot_ips: set) -> pd.Series:
-    ip = row['device.ipv4_ips']
+    ip = row['device.ipv4_ip']
     device_traffic_df = set(traffic_df[traffic_df['src_endpoint.ip'] == ip]['dst_endpoint.ip']) | set(traffic_df[traffic_df['dst_endpoint.ip'] == ip]['src_endpoint.ip'])
     if not row['device.is_ot']:
         row['device.is_ot'] = True if len(device_traffic_df.intersection(ot_ips)) > 0 else False

@@ -58,7 +58,7 @@ class Report:
 
         # Architectural Insights
 
-        self.suspicious_connections_panel()
+        self.suspicious_outbound_connections_panel()
         # Suspicious connections from internal sources to external destinations
             #  "outbound" table: [source_ip, dest_ip, service, ?is_OT_device?]
         
@@ -142,10 +142,10 @@ class Report:
     #
     #####
 
-    def suspicious_connections_panel(self):
+    def suspicious_outbound_connections_panel(self):
 
         suspicious_connections_panel = ReportModule()
-        suspicious_connections_panel.name = "suspicious_connections_panel"
+        suspicious_connections_panel.name = "suspicious_outbound_connections_panel"
         
         outbound_traffic = self.traffic_df[self.traffic_df['connection_info.direction_name'] == "outbound"]
 
@@ -158,7 +158,7 @@ class Report:
         
         display_cols = ["src_endpoint.ip", "dst_endpoint.ip", "dst_endpoint.port", "service.name"]
         outbound_traffic_ot = outbound_traffic_w_ot[outbound_traffic_w_ot["device.is_ot"] == True][display_cols]
-        outbound_traffic_ot_counts = outbound_traffic_ot.value_counts().to_dict()
+        outbound_traffic_ot_counts = pd.DataFrame(outbound_traffic_ot.value_counts()).reset_index().to_dict(orient='records')
         suspicious_connections_panel.data = outbound_traffic_ot_counts
 
         self.data['modules'][suspicious_connections_panel.name] = suspicious_connections_panel.data
@@ -180,10 +180,8 @@ class Report:
         ot_services.name = "ot_services"
 
         ot_services.data = (
-            self.services_df[self.services_df['service.information_categories'].str.contains("Industrial Protocol", na=False)].to_dict()
+            self.services_df[self.services_df['service.information_categories'].str.contains("Industrial Protocol", na=False)].to_dict(orient='records')
         )
-
-        print(ot_services.data)
 
         self.data['modules'][ot_services.name] = ot_services.data
 
@@ -193,7 +191,12 @@ class ReportModule:
     data: object = None
     name: str = None
 
-@dataclass
+
 class ExecutiveItem:
-    description: str = None
-    name: str = None
+    
+    def __init__(self):
+        self.description = None
+
+    def criteria() -> bool:
+        return 
+    

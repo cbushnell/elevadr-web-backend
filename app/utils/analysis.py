@@ -221,95 +221,124 @@ class Analyzer:
 
     def endpoints_df_processing(self):
 
-        # device.mac: collect device mac addresses from the traffic_df
-        macs = self.traffic_df.apply(
-            get_macs,
-            axis=1
-        )
-        macs_df = pd.DataFrame.from_records(macs, columns=["src_mac", "dst_mac"])
-        macs_df = pd.concat([macs_df['src_mac'], macs_df['dst_mac']]).dropna()
-        self.endpoints_df['device.mac'] = pd.unique(macs_df)
-        self.endpoints_df = self.endpoints_df.set_index('device.mac')
+        # # device.mac: collect device mac addresses from the traffic_df
+        # macs = self.traffic_df.apply(
+        #     get_macs,
+        #     axis=1
+        # )
+        # macs_df = pd.DataFrame.from_records(macs, columns=["src_mac", "dst_mac"])
+        # macs_df = pd.concat([macs_df['src_mac'], macs_df['dst_mac']]).dropna()
+        # self.endpoints_df['device.mac'] = pd.unique(macs_df)
+        # self.endpoints_df = self.endpoints_df.set_index('device.mac')
         
-        # device.ipv4_ips, device.ipv6_ips, device.ip_scope, device.ipv4_subnets, device.ipv6_subnets, device.protocol_ver_id: collect ip information for each device from traffic_df
-        self.traffic_df.apply(
-            lambda row: get_endpoint_ip_data(
-                row, endpoints_df=self.endpoints_df
-            ),
-            axis=1
-        )
-        self.endpoints_df = self.endpoints_df.apply(
+        # device.mac, device.ipv4_ips, device.ipv6_ips, device.ip_scope, device.ipv4_subnets, device.ipv6_subnets, device.protocol_ver_id: collect ip information for each device from traffic_df
+        unicast_and_multicast_subset_traffic_df = self.traffic_df[self.traffic_df['connection_info.type_name'].isin(['unicast'])]
+        src_mac_with_ipv4_df = self.traffic_df[self.traffic_df['connection_info.protocol_ver_id'] == 4].groupby(['src_endpoint.mac', 'src_endpoint.ip'])[['src_endpoint.mac', 'src_endpoint.ip']].value_counts().index.to_frame(index=False, allow_duplicates=True).rename(columns={'src_endpoint.mac':'device.mac', 'src_endpoint.ip':'device.ipv4_ip'})
+        src_mac_with_ipv6_df = self.traffic_df[self.traffic_df['connection_info.protocol_ver_id'] == 6].groupby(['src_endpoint.mac', 'src_endpoint.ip'])[['src_endpoint.mac', 'src_endpoint.ip']].value_counts().index.to_frame(index=False, allow_duplicates=True).rename(columns={'src_endpoint.mac':'device.mac', 'src_endpoint.ip':'device.ipv6_ip'})
+        dst_mac_with_ipv4_df = unicast_and_multicast_subset_traffic_df[unicast_and_multicast_subset_traffic_df['connection_info.protocol_ver_id'] == 4].groupby(['dst_endpoint.mac', 'dst_endpoint.ip'])[['dst_endpoint.mac', 'dst_endpoint.ip']].value_counts().index.to_frame(index=False, allow_duplicates=True).rename(columns={'dst_endpoint.mac':'device.mac', 'dst_endpoint.ip':'device.ipv4_ip'})
+        dst_mac_with_ipv6_df = unicast_and_multicast_subset_traffic_df[unicast_and_multicast_subset_traffic_df['connection_info.protocol_ver_id'] == 6].groupby(['dst_endpoint.mac', 'dst_endpoint.ip'])[['dst_endpoint.mac', 'dst_endpoint.ip']].value_counts().index.to_frame(index=False, allow_duplicates=True).rename(columns={'dst_endpoint.mac':'device.mac', 'dst_endpoint.ip':'device.ipv6_ip'})
+
+        prelim_endpoints_df = pd.concat([src_mac_with_ipv4_df, dst_mac_with_ipv4_df, src_mac_with_ipv6_df, dst_mac_with_ipv6_df]).drop_duplicates()
+        # print(prelim_endpoints_df_df)
+        # print(len(prelim_endpoints_df_df))
+
+        # self.traffic_df.apply(
+        #     lambda row: get_endpoint_ip_data(
+        #         row, endpoints_df=prelim_endpoints_df_df
+        #     ),
+        #     axis=1
+        # )
+        prelim_endpoints_df_df = prelim_endpoints_df_df.apply(
             lambda row: set_manufacturers(row, self.manufacturers_df),
             axis=1
         )
 
         # Adding service/port activity associated with the local endpoint
         # Filter for successful connection
-        successful_connections = self.traffic_df[self.traffic_df["connection_info.activity_name"].isin(["S0", "S1", "SF", "S2", "S3", "RSTO"])]
+        # successful_connections = self.traffic_df[self.traffic_df["connection_info.activity_name"].isin(["S0", "S1", "SF", "S2", "S3", "RSTO"])]
+        successful_connections = self.traffic_df
+
 
         # device.incoming_services
         incoming_service_df = successful_connections.groupby("dst_endpoint.ip").agg({"service.name": lambda x: set(x)})
         incoming_service_df = incoming_service_df.rename(columns={"service.name": "device.incoming_services"})
-        self.endpoints_df = self.endpoints_df.merge(
+        prelim_endpoints_df_df = prelim_endpoints_df_df.merge(
             incoming_service_df,
-            left_on="device.ipv4_ips",
+            left_on="device.ipv4_ip",
             right_index=True,
             how="left",
         )
-        self.endpoints_df = self.endpoints_df.drop("device.incoming_services_x", axis=1)
-        self.endpoints_df = self.endpoints_df.rename(columns={"device.incoming_services_y": "device.incoming_services"})
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.drop("device.incoming_services_x", axis=1)
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.rename(columns={"device.incoming_services_y": "device.incoming_services"})
 
         # device.incoming_ports
         incoming_port_df = successful_connections.groupby("dst_endpoint.ip").agg({"dst_endpoint.port": lambda x: set(x)})
         incoming_port_df = incoming_port_df.rename(columns={"dst_endpoint.port": "device.incoming_ports"})
-        self.endpoints_df = self.endpoints_df.merge(
+        prelim_endpoints_df_df = prelim_endpoints_df_df.merge(
             incoming_port_df,
-            left_on="device.ipv4_ips",
+            left_on="device.ipv4_ip",
             right_index=True,
             how="left",
         )
-        self.endpoints_df = self.endpoints_df.drop("device.incoming_ports_x", axis=1)
-        self.endpoints_df = self.endpoints_df.rename(columns={"device.incoming_ports_y": "device.incoming_ports"})
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.drop("device.incoming_ports_x", axis=1)
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.rename(columns={"device.incoming_ports_y": "device.incoming_ports"})
 
         # device.dst_services
         dst_service_df = successful_connections.groupby("src_endpoint.ip").agg({"service.name": lambda x: set(x)})
         dst_service_df = dst_service_df.rename(columns={"service.name": "device.dst_services"})
-        self.endpoints_df = self.endpoints_df.merge(
+        prelim_endpoints_df_df = prelim_endpoints_df_df.merge(
             dst_service_df,
-            left_on="device.ipv4_ips",
+            left_on="device.ipv4_ip",
             right_index=True,
             how="left",
         )
-        self.endpoints_df = self.endpoints_df.drop("device.dst_services_x", axis=1)
-        self.endpoints_df = self.endpoints_df.rename(columns={"device.dst_services_y": "device.dst_services"})
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.drop("device.sending_services_x", axis=1)
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.rename(columns={"device.sending_services_y": "device.sending_services"})
 
         # device.dst_ports
         dst_port_df = successful_connections.groupby("src_endpoint.ip").agg({"dst_endpoint.port": lambda x: set(x)})
         dst_port_df = dst_port_df.rename(columns={"dst_endpoint.port": "device.dst_ports"})
-        self.endpoints_df = self.endpoints_df.merge(
+        prelim_endpoints_df_df = prelim_endpoints_df_df.merge(
             dst_port_df,
-            left_on="device.ipv4_ips",
+            left_on="device.ipv4_ip",
             right_index=True,
             how="left",
         )
-        self.endpoints_df = self.endpoints_df.drop("device.dst_ports_x", axis=1)
-        self.endpoints_df = self.endpoints_df.rename(columns={"device.dst_ports_y": "device.dst_ports"})
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.drop("device.dst_ports_x", axis=1)
+        # prelim_endpoints_df_df = prelim_endpoints_df_df.rename(columns={"device.dst_ports_y": "device.dst_ports"})
+        # print(prelim_endpoints_df_df)
+        prelim_endpoints_df_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/endpoints_very_tmp.csv")
 
         # device.is_ot: set True or False based on whether the device has communicated on an industrial protocol
-        self.endpoints_df['device.is_ot'] = self.endpoints_df.apply(
+        prelim_endpoints_df_df['device.is_ot'] = prelim_endpoints_df_df.apply(
             lambda row: is_using_ot_services(row, self.traffic_df),
             axis=1
         )
 
         # check for connections between known OT hosts and devices they're communicating with - even if not over OT protocols
-        ot_ips = set(self.endpoints_df[self.endpoints_df['device.is_ot']]['device.ipv4_ips'])
-        self.endpoints_df = self.endpoints_df.apply(
+        ot_ips = set(prelim_endpoints_df_df[prelim_endpoints_df_df['device.is_ot']]['device.ipv4_ip'])
+        prelim_endpoints_df_df = prelim_endpoints_df_df.apply(
             lambda row: is_communicating_with_ot_hosts(row, self.traffic_df, ot_ips),
             axis=1
         )
 
-        self.endpoints_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/endpoints_tmp.csv")
-        self.traffic_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/traffic_tmp.csv")
+        self.endpoints_df = prelim_endpoints_df
+
+        #### COMBINE ALL DEVICE DATA ####
+
+        self.endpoints_df = pd.DataFrame()
+        prelim_endpoints_df.apply(
+            lambda row: self.dedup_endpoints,
+            axis=1
+        )
+
+
+    def services_df_processing(self):
+
+        self.services_df = self.traffic_df[self.services_df.columns]
+        info_categories = self.services_df.apply(lambda x: convert_list_col_to_str(x, "service.information_categories"), axis=1)
+        risk_categories = info_categories.apply(lambda x: convert_list_col_to_str(x, "service.risk_categories"), axis=1)
+        self.services_df = risk_categories.drop_duplicates(keep="first")
 
     def get_assessor_data(self):
         # Load Assessor data - external datasets to enrich pcap data:
@@ -347,12 +376,6 @@ class Analyzer:
             print(e)
             quit()
 
-    def services_df_processing(self):
-
-        self.services_df = self.traffic_df[self.services_df.columns]
-        info_categories = self.services_df.apply(lambda x: convert_list_col_to_str(x, "service.information_categories"), axis=1)
-        risk_categories = info_categories.apply(lambda x: convert_list_col_to_str(x, "service.risk_categories"), axis=1)
-        self.services_df = risk_categories.drop_duplicates(keep="first")
 
     #######
     #
@@ -365,6 +388,9 @@ class Analyzer:
     # Endpoints
     #
     #######
+
+    def dedup_endpoints(self, row):
+        pass
 
     # TODO: Do we count this regardless of whether it is source or destination?
     @lru_cache
