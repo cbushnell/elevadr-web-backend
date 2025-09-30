@@ -307,7 +307,6 @@ class Analyzer:
         # prelim_endpoints_df_df = prelim_endpoints_df_df.drop("device.dst_ports_x", axis=1)
         # prelim_endpoints_df_df = prelim_endpoints_df_df.rename(columns={"device.dst_ports_y": "device.dst_ports"})
         # print(prelim_endpoints_df_df)
-        prelim_endpoints_df_df.to_csv("/Users/analyst/dev/git/eleVADR/.temp/endpoints_very_tmp.csv")
 
         # device.is_ot: set True or False based on whether the device has communicated on an industrial protocol
         prelim_endpoints_df_df['device.is_ot'] = prelim_endpoints_df_df.apply(
