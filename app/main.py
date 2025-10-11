@@ -22,7 +22,7 @@ if __name__ == "__main__":
     PROJECT_ROOT = Path(__file__).resolve().parent
 
     file_path_info = FilePathInfo(
-        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/CR1_6.pcap")),
+        path_to_pcap=str(Path(PROJECT_ROOT, "data/uploads/MODBUS-TestDataPart1.pcap")), # Ultimately this will be whichever pcap is passed in
         path_to_zeek=str(Path(PROJECT_ROOT, "data/zeeks")),
         path_to_zeek_scripts=str(Path(PROJECT_ROOT, "data/zeek_scripts")),
         path_to_assessor_data=str(Path(PROJECT_ROOT, "data/assessor_data"))
@@ -41,4 +41,4 @@ if __name__ == "__main__":
 
     #### Testing report modules ###
     string = json.dumps(report.data, indent=4)
-    # print(string)
+    print(string)

@@ -3,7 +3,10 @@ import json
 import yaml
 import pandas as pd
 import numpy as np
+import os
 from collections import Counter
+
+from pathlib import Path
 
 class FilePathInfo:
     
@@ -18,6 +21,16 @@ class FilePathInfo:
         self.path_to_zeek = path_to_zeek
         self.path_to_zeek_scripts = path_to_zeek_scripts
         self.path_to_assessor_data = path_to_assessor_data
+
+        if not Path(self.path_to_zeek).exists():
+            os.mkdir(self.path_to_zeek)
+        if not Path(self.path_to_zeek_scripts).exists():
+            os.mkdir(self.path_to_zeek_scripts)
+        if not Path(self.path_to_assessor_data).exists():
+            os.mkdir(self.path_to_assessor_data)
+        if not Path(self.path_to_pcap).parent.exists():
+            os.mkdir(Path(self.path_to_pcap).parent)
+
 
 def convert_ips(ip):
     try:
