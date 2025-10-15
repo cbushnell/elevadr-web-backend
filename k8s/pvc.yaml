@@ -1,0 +1,33 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elevadr-pcap-input
+  namespace: elevadr
+  labels:
+    app: elevadr
+    type: input-storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can read the same PCAP
+  resources:
+    requests:
+      storage: 10Gi  # Adjust based on PCAP size needs
+  # storageClassName: fast-ssd  # Optional: specify storage class
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elevadr-report-output
+  namespace: elevadr
+  labels:
+    app: elevadr
+    type: output-storage
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple jobs can write reports
+  resources:
+    requests:
+      storage: 5Gi  # Adjust based on expected report volume
+  # storageClassName: fast-ssd  # Optional: specify storage class

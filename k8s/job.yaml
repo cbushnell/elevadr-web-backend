@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elevadr-analysis
+  namespace: elevadr
+  labels:
+    app: elevadr
+    type: analysis-job
+spec:
+  # Number of times to retry on failure
+  backoffLimit: 3
+
+  # Time to keep completed jobs (for log inspection)
+  ttlSecondsAfterFinished: 3600  # 1 hour
+
+  template:
+    metadata:
+      labels:
+        app: elevadr
+        type: analysis-job
+    spec:
+      restartPolicy: OnFailure
+
+      # Optional: Use node selector for resource-intensive jobs
+      # nodeSelector:
+      #   workload: analysis
+
+      containers:
+      - name: elevadr
+        image: elevadr:latest
+        imagePullPolicy: IfNotPresent
+
+        # Resource requests and limits
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+
+        # Environment configuration
+        envFrom:
+        - configMapRef:
+            name: elevadr-config
+
+        env:
+        - name: PCAP_INPUT
+          value: "/input/capture.pcap"
+        - name: REPORT_OUTPUT
+          value: "/output/report.json"
+
+        # Volume mounts
+        volumeMounts:
+        - name: pcap-input
+          mountPath: /input
+          readOnly: true
+        - name: report-output
+          mountPath: /output
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      # Input PCAP - use PVC, ConfigMap, or hostPath depending on your setup
+      - name: pcap-input
+        persistentVolumeClaim:
+          claimName: elevadr-pcap-input
+
+      # Output reports - use PVC for persistent storage
+      - name: report-output
+        persistentVolumeClaim:
+          claimName: elevadr-report-output
+
+      # Temporary storage for Zeek logs
+      - name: tmp
+        emptyDir: {}
