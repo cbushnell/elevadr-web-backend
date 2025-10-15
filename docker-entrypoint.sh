@@ -36,12 +36,12 @@ PCAP_FILENAME=$(basename "$PCAP_INPUT")
 
 # Copy PCAP to uploads directory so the app can access it
 echo -e "${YELLOW}Preparing PCAP for analysis...${NC}"
-mkdir -p /app/app/data/uploads
-cp "$PCAP_INPUT" /app/app/data/uploads/
+mkdir -p /app/data/uploads
+cp "$PCAP_INPUT" /app/data/uploads/
 
 # Run the analysis using main.py
 echo -e "${YELLOW}Starting analysis with Zeek...${NC}"
-cd /app/app
+cd /app
 
 python3 main.py \
   --pcap "data/uploads/${PCAP_FILENAME}" \
@@ -70,7 +70,7 @@ else
 fi
 
 # Cleanup temporary PCAP copy
-rm -f /app/app/data/uploads/"${PCAP_FILENAME}"
+rm -f /app/data/uploads/"${PCAP_FILENAME}"
 
 echo ""
 echo -e "${GREEN}Container execution complete${NC}"

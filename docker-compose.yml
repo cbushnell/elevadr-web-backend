@@ -10,8 +10,8 @@ services:
 
     # Environment variables
     environment:
-      - PCAP_INPUT=/input/capture.pcap
-      - REPORT_OUTPUT=/output/report.json
+      - PCAP_INPUT=${PCAP_INPUT:-/input/capture.pcap}
+      - REPORT_OUTPUT=${REPORT_OUTPUT:-/output/report.json}
       - PYTHONUNBUFFERED=1
 
     # Volume mounts

@@ -64,12 +64,12 @@ def run_analysis(pcap_path, output_path=None, project_root=None):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
+    argument_parser = argparse.ArgumentParser(
         description='eleVADR - OT Network Security Analysis',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    parser.add_argument(
+    argument_parser.add_argument(
         '--pcap',
         type=str,
         required=True,
@@ -77,23 +77,24 @@ if __name__ == "__main__":
         help='Path to PCAP file (can also use PCAP_INPUT env var)'
     )
 
-    parser.add_argument(
+    argument_parser.add_argument(
         '--output',
         type=str,
         default=os.environ.get('REPORT_OUTPUT'),
         help='Output path for JSON report (can also use REPORT_OUTPUT env var, default: stdout)'
     )
 
-    parser.add_argument(
+    argument_parser.add_argument(
         '--project-root',
         type=str,
-        default=None,
+        default=os.getcwd(),
         help='Project root directory (default: parent of main.py)'
     )
 
-    args = parser.parse_args()
+    args = argument_parser.parse_args()
 
     # Validate PCAP exists
+    # TODO: Validate that it is actually a PCAP
     if not Path(args.pcap).exists():
         print(f"Error: PCAP file not found: {args.pcap}", file=sys.stderr)
         sys.exit(1)

@@ -59,9 +59,9 @@ def connection_type_processing(ip):
             ip_type = "multicast"
         elif ipaddress_ip.is_link_local:
             ip_type = "link-local"
-        elif ( 
+        elif (
             ipaddress_ip.version == 4 and
-            int.from_bytes(ipaddress.ip_address(ipaddress_ip).packed) & 255 == 255
+            int.from_bytes(ipaddress.ip_address(ipaddress_ip).packed, byteorder='big') & 255 == 255
         ):
             ip_type = "broadcast"
         else:

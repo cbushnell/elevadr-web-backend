@@ -28,6 +28,11 @@ RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
     ca-certificates \
+    libpcap0.8 \
+    libssl3 \
+    libmaxminddb0 \
+    libzmq5 \
+    tree \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -47,7 +52,7 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app/ ./app/
+COPY app/ .
 
 # Create necessary directories
 RUN mkdir -p /app/data/uploads \
