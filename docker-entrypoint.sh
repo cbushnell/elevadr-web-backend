@@ -40,7 +40,7 @@ mkdir -p /app/data/uploads
 cp "$PCAP_INPUT" /app/data/uploads/
 
 # Run the analysis using main.py
-echo -e "${YELLOW}Starting analysis with Zeek...${NC}"
+echo -e "${YELLOW}Starting analysis...${NC}"
 cd /app
 
 python3 main.py \
