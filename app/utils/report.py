@@ -94,7 +94,7 @@ class Report:
         service_panel.name = "service_panel"
 
         service_panel.data = {
-            "num_known_services": len(self.services_df['service.name'].unique()),
+            "num_known_services": len(self.services_df['service.name'].dropna().unique()),
             "num_ot_services": len(self.services_df[self.services_df['service.information_categories'].str.contains("Industrial Protocol", na=False)]),
             "num_risky_services": len(self.services_df['service.risk_categories'].dropna()),
             "num_unknown_services": len(self.traffic_df[pd.isna(self.traffic_df["service.name"])]['dst_endpoint.port'].drop_duplicates())

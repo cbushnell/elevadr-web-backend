@@ -385,32 +385,48 @@ class Analyzer:
     #
     #######
 
-    def combine_endpoint_rows(self, rows):
-        combined_value = None
-        if len(rows) > 0:
-                if rows.name in ["device.incoming_services", "device.incoming_ports", "device.sent_services", "device.sent_ports"]:
-                    try:
-                        combined_value = set.union(*[x for x in list(rows) if type(x) == set])
-                    except:
-                        combined_value = np.nan
-                elif rows.name in ["device.mac", "device.manufacturer"]:
-                    combined_value = rows.iloc[0]
-                elif rows.name in ["device.ipv4_ip", "device.ipv6_ip"]:
-                    rows = rows.dropna()
-                    if len(rows) > 0:
-                        combined_value = set(rows)
-                    else:
-                        combined_value = np.nan
-                elif rows.name in ["device.is_ot"]:
-                    combined_value = any(rows)
-        return combined_value
-
     def dedup_endpoints(self, df: pd.DataFrame):
-        deduped_df = pd.DataFrame(columns=df.columns)
-        macs = df['device.mac'].unique()
-        for i, mac in enumerate(macs):
-            mac_subset = df[df['device.mac'] == mac]
-            deduped_df.loc[i]= mac_subset.apply(self.combine_endpoint_rows)
+        # Define specific aggregation functions
+        def union_sets(x):
+            """Union all sets in the series and convert to list"""
+            sets = [val for val in x if isinstance(val, set)]
+            if sets:
+                return list(set.union(*sets))
+            return np.nan
+
+        def collect_unique_ips(x):
+            """Collect unique IPs into a list"""
+            x_clean = x.dropna()
+            if len(x_clean) > 0:
+                return list(set(x_clean))
+            return np.nan
+
+        def first_non_null(x):
+            """Return first non-null value"""
+            x_clean = x.dropna()
+            if len(x_clean) > 0:
+                return x_clean.iloc[0]
+            return np.nan
+
+        # Create aggregation dictionary for each column
+        agg_dict = {}
+
+        for col in df.columns:
+            if col == "device.mac":
+                agg_dict[col] = 'first'
+            elif col == "device.manufacturer":
+                agg_dict[col] = 'first'
+            elif col in ["device.ipv4_ip", "device.ipv6_ip"]:
+                agg_dict[col] = collect_unique_ips
+            elif col in ["device.incoming_services", "device.incoming_ports", "device.sent_services", "device.sent_ports"]:
+                agg_dict[col] = union_sets
+            elif col == "device.is_ot":
+                agg_dict[col] = 'any'
+            else:
+                agg_dict[col] = first_non_null
+
+        # Group by MAC address and apply aggregations
+        deduped_df = df.groupby('device.mac', as_index=False).agg(agg_dict)
         deduped_df = deduped_df.set_index('device.mac')
         return deduped_df
 

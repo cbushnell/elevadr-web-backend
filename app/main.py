@@ -103,5 +103,5 @@ if __name__ == "__main__":
     try:
         run_analysis(args.pcap, args.output, args.project_root)
     except Exception as e:
-        print(f"Error during analysis: {e}", file=sys.stderr)
+        print(f"Error during analysis: {e}", file=sys.stderr.name)
         sys.exit(1)
