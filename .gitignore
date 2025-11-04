@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+#wsl
+*Zone.Identifier
+
 # Distribution / packaging
 .Python
 build/
@@ -56,7 +59,7 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
+# *.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -172,3 +175,22 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Mac stuff:
+.DS_Store
+
+# Redis stuff:
+dump.rdb
+
+# Data Stuff
+*.pcap
+*.log
+uploads/
+zeeks/
+
+# Exploratory Work
+*.ipynb
+.temp/
+
+# VSCode
+.vscode/
