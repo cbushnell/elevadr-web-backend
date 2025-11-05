@@ -136,8 +136,20 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
 
     try:
         row["service.name"] = ports_df.loc[port]['Service Name']
-    except (KeyError, IndexError):
+        row["service.is_ot"] = ports_df.loc[port]["OT System Type"]
+    except (KeyError, IndexError) as e1:
         row["service.name"] = None
+        row["service.is_ot"] = False
+        if int(port) < 1024:
+            row["service.description"] = "Unassigned well-known port number, this port should not be used."
+            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"]
+        elif int(port) < 49151:
+            row["service.description"] = "Unknown assigned port, please inform CISA of what vendor or service we should track at elevadr@cisa.dhs.gov"
+            row["service.risk_categories"] = ["Unknown Service"] 
+        else:
+            #ToDo - check consistency of these
+            row["service.description"] = "Ephemeral Port"
+            row["service.risk_categories"] = []
         return row
 
     try:
@@ -147,7 +159,6 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         row["service.risk_categories"] = port_risk_row['risk_categories']
     except (KeyError, IndexError):
         row["service.description"] = None
-
     return row
 
 
@@ -171,8 +182,8 @@ def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> bool:
         (traffic_df['dst_endpoint.ip'] == ip)
     ]
 
-    info_categories = device_traffic['service.information_categories'].dropna()
-    return any("Industrial Protocol" in str(cat) for cat in info_categories)
+    # info_categories = device_traffic['service.information_categories'].dropna()
+    return device_traffic["service.is_ot"].any()
 
 
 def is_communicating_with_ot_hosts(row: pd.Series, traffic_df: pd.DataFrame,
