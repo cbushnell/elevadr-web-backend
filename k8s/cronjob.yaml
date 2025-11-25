@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: elevadr-scheduled-analysis
+  namespace: elevadr
+  labels:
+    app: elevadr
+    type: scheduled-analysis
+spec:
+  # Schedule: Run daily at 2 AM
+  # Adjust as needed: https://crontab.guru/
+  schedule: "0 2 * * *"
+
+  # Concurrency policy
+  concurrencyPolicy: Forbid  # Don't run concurrent jobs
+
+  # Keep last 3 successful and 1 failed job
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+  jobTemplate:
+    metadata:
+      labels:
+        app: elevadr
+        type: scheduled-analysis
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 7200  # Keep for 2 hours
+
+      template:
+        metadata:
+          labels:
+            app: elevadr
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+          - name: elevadr
+            image: elevadr:latest
+            imagePullPolicy: IfNotPresent
+
+            resources:
+              requests:
+                memory: "2Gi"
+                cpu: "1000m"
+              limits:
+                memory: "4Gi"
+                cpu: "2000m"
+
+            envFrom:
+            - configMapRef:
+                name: elevadr-config
+
+            env:
+            - name: PCAP_INPUT
+              value: "/input/capture.pcap"
+            - name: REPORT_OUTPUT
+              value: "/output/report-$(date +%Y%m%d-%H%M%S).json"
+
+            volumeMounts:
+            - name: pcap-input
+              mountPath: /input
+              readOnly: true
+            - name: report-output
+              mountPath: /output
+            - name: tmp
+              mountPath: /tmp
+
+          volumes:
+          - name: pcap-input
+            persistentVolumeClaim:
+              claimName: elevadr-pcap-input
+          - name: report-output
+            persistentVolumeClaim:
+              claimName: elevadr-report-output
+          - name: tmp
+            emptyDir: {}

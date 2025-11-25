@@ -24,6 +24,11 @@ ICS_manufacturer_search_words:
   - phoenix contact
   - eaton
   - automation
+<<<<<<< HEAD
+=======
+  - seedsware
+  - intelligent platform
+>>>>>>> docker_containerization
 
 # ICS_ports:
 #   502: "Modbus"
