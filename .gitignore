@@ -188,6 +188,10 @@ zeeks/
 # Exploratory Work
 *.ipynb
 .temp/
+.report_ref/
 
 # VSCode
 .vscode/
+
+# AI
+claude.md

@@ -18,15 +18,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Final stage
-FROM ubuntu:22.04
+FROM python:3.10-slim
 
 # Avoid interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install Python and runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3-pip \
     ca-certificates \
     libpcap0.8 \
     libssl3 \
@@ -36,8 +34,10 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Zeek from builder stage
-COPY --from=builder /opt/zeek /opt/zeek
+# Copy only necessary Zeek components from builder stage
+COPY --from=builder /opt/zeek/bin /opt/zeek/bin
+COPY --from=builder /opt/zeek/lib /opt/zeek/lib
+COPY --from=builder /opt/zeek/share/zeek /opt/zeek/share/zeek
 
 # Add Zeek to PATH
 ENV PATH="/opt/zeek/bin:${PATH}"
