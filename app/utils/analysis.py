@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import re
 
 from .utils import (
     check_ip_version,
@@ -331,10 +332,11 @@ class Analyzer:
 
     def service_counts_in_traffic(self) -> dict:
         """Count occurrences of known and unknown services."""
-        named_service_counts = self.traffic_df['service.name'].value_counts().to_dict()
+        known_services = self.traffic_df[~self.traffic_df['service.name'].str.contains("UNK:", na=False)]
+        unknown_services = self.traffic_df[self.traffic_df['service.name'].str.contains("UNK:", na=True)]
+        named_service_counts = known_services['service.name'].value_counts().to_dict()
         unnamed_service_counts = (
-            self.traffic_df[pd.isna(self.traffic_df["service.name"])]
-            ['dst_endpoint.port'].value_counts().to_dict()
+            unknown_services['dst_endpoint.port'].value_counts().to_dict()
         )
         return {
             "known_services": named_service_counts,
@@ -346,7 +348,7 @@ class Analyzer:
         category_map = {}
         for _, row in self.services_df.iterrows():
             categories = row[category]
-            if isinstance(categories, str):
+            if isinstance(categories, str) and categories != "": # prevent blank categories from being counted
                 for cat in categories.split(", "):
-                    category_map.setdefault(cat, []).append(row['service.name'])
+                        category_map.setdefault(cat, []).append(row['service.name'])
         return category_map

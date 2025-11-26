@@ -138,17 +138,18 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         row["service.name"] = ports_df.loc[port]['Service Name']
         row["service.is_ot"] = ports_df.loc[port]["OT System Type"]
     except (KeyError, IndexError) as e1:
-        row["service.name"] = None
         row["service.is_ot"] = False
         if int(port) < 1024:
+            row["service.name"] = "UNK: Unassigned Port " + str(port)
             row["service.description"] = "Unassigned well-known port number, this port should not be used."
-            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"]
+            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"] # TODO: "Unknown Service" category might not be needed
         elif int(port) < 49151:
+            row["service.name"] = "UNK: Unknown Assigned Port " + str(port)
             row["service.description"] = "Unknown assigned port, please inform CISA of what vendor or service we should track at elevadr@cisa.dhs.gov"
-            row["service.risk_categories"] = ["Unknown Service"] 
+            row["service.risk_categories"] = ["Unknown Service"]
         else:
             #ToDo - check consistency of these
-            row["service.description"] = "Ephemeral Port"
+            row["service.description"] = "UNK: Ephemeral Port " + str(port) 
             row["service.risk_categories"] = []
         return row
 
@@ -216,8 +217,9 @@ def count_values_in_list_column(df: pd.DataFrame, column: str) -> dict:
     for _, row in df.iterrows():
         values = row[column]
         if isinstance(values, str):
-            value_list = [x for x in values.split(", ")]
-            counter.update(value_list)
+            if values != "": # Prevent counting cases of blank values
+                value_list = [x for x in values.split(", ")]
+                counter.update(value_list)
     return dict(counter)
 
 

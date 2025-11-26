@@ -115,9 +115,14 @@ class ServicePanelModule(ReportModule):
         return "service_panel"
 
     def generate_data(self) -> dict:
+        # Services that do not have a known service mapping, but require additional information - service.name in format "UKN: <type> Port <Port Number>"
+        unknown_services = self.traffic_df[self.traffic_df['service.name'].str.contains("UNK:", na=True)]
+        # Known services
+        known_services = self.traffic_df[~self.traffic_df['service.name'].str.contains("UNK:", na=False)]
+
         return {
             "num_known_services": len(
-                self.services_df["service.name"].dropna().unique()
+                known_services["service.name"].dropna().unique()
             ),
             "num_ot_services": len(
                 self.services_df[
@@ -130,7 +135,7 @@ class ServicePanelModule(ReportModule):
                 self.services_df["service.risk_categories"].dropna()
             ),
             "num_unknown_services": len(
-                self.traffic_df[pd.isna(self.traffic_df["service.name"])][
+                unknown_services[
                     "dst_endpoint.port"
                 ].drop_duplicates()
             ),
