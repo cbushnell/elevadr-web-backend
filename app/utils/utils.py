@@ -1,47 +1,3 @@
-<<<<<<< HEAD
-import ipaddress
-import json
-import yaml
-
-
-def convert_ips(ip):
-    try:
-        return int(ipaddress.IPv4Address(ip))
-    except ipaddress.AddressValueError:
-        return int(ipaddress.IPv6Address(ip))
-    
-def convert_ip_to_str(ip):
-    try:
-        return str(ipaddress.IPv4Address(ip))
-    except ipaddress.AddressValueError:
-        return str(ipaddress.IPv6Address(ip))
-    
-def check_ip_version(ip):
-    return ipaddress.ip_address(str(ip)).version
-
-def get_list_of_manufacturers(oui_path, row, ics_manufacturers):
-    """looks at observed MAC addresses and tags devices that likely serve an ICS/OT function"""
-    with open(oui_path) as f:
-        oui_lookup = json.load(f)
-    # load pcap
-    mac_addr = row["orig_l2_addr"]
-    oui = mac_addr[0:8].replace(":", "-").upper()
-    try:
-        manufacturer = oui_lookup[oui]
-    except:
-        return None
-    for man in ics_manufacturers:
-        if man in manufacturer:
-            return manufacturer
-
-    return None
-
-
-def load_consts(consts_path):
-    with open(consts_path) as f:
-        data = yaml.load(f, yaml.Loader)
-        return data["ICS_manufacturer_search_words"]
-=======
 """Utility functions for network traffic analysis and data processing."""
 
 import ipaddress
@@ -180,8 +136,20 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
 
     try:
         row["service.name"] = ports_df.loc[port]['Service Name']
-    except (KeyError, IndexError):
+        row["service.is_ot"] = ports_df.loc[port]["OT System Type"]
+    except (KeyError, IndexError) as e1:
         row["service.name"] = None
+        row["service.is_ot"] = False
+        if int(port) < 1024:
+            row["service.description"] = "Unassigned well-known port number, this port should not be used."
+            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"]
+        elif int(port) < 49151:
+            row["service.description"] = "Unknown assigned port, please inform CISA of what vendor or service we should track at elevadr@cisa.dhs.gov"
+            row["service.risk_categories"] = ["Unknown Service"] 
+        else:
+            #ToDo - check consistency of these
+            row["service.description"] = "Ephemeral Port"
+            row["service.risk_categories"] = []
         return row
 
     try:
@@ -191,7 +159,6 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         row["service.risk_categories"] = port_risk_row['risk_categories']
     except (KeyError, IndexError):
         row["service.description"] = None
-
     return row
 
 
@@ -215,8 +182,8 @@ def is_using_ot_services(row: pd.Series, traffic_df: pd.DataFrame) -> bool:
         (traffic_df['dst_endpoint.ip'] == ip)
     ]
 
-    info_categories = device_traffic['service.information_categories'].dropna()
-    return any("Industrial Protocol" in str(cat) for cat in info_categories)
+    # info_categories = device_traffic['service.information_categories'].dropna()
+    return device_traffic["service.is_ot"].any()
 
 
 def is_communicating_with_ot_hosts(row: pd.Series, traffic_df: pd.DataFrame,
@@ -261,4 +228,3 @@ def load_consts(consts_path: str) -> list:
     with open(consts_path) as f:
         data = yaml.load(f, yaml.Loader)
         return data["ICS_manufacturer_search_words"]
->>>>>>> docker_containerization

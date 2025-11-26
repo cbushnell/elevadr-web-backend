@@ -6429,11 +6429,7 @@ IANA assigned this well-formed service name as a replacement for ""documentum_s"
 19790,faircom-db,"tcp, udp",FairCom Database,IANA,IT
 19998,iec-104-sec,"tcp, udp",IEC 60870-5-104 process control - secure,IANA,IT
 19999,dnp-sec,"sctp, tcp, udp","Distributed Network Protocol - secured, Distributed Network Protocol - Secure",IANA,IT
-<<<<<<< HEAD
-20000,DNP3,"sctp, tcp, udp","DNP, Distributed Network Protocol",IANA,IT
-=======
 20000,DNP3,"sctp, tcp, udp","DNP, Distributed Network Protocol",IANA,ICS
->>>>>>> docker_containerization
 20001,microsan,"tcp, udp",MicroSAN,IANA,IT
 20002,commtact-http,"tcp, udp",Commtact HTTP,IANA,IT
 20003,commtact-https,"tcp, udp",Commtact HTTPS,IANA,IT
