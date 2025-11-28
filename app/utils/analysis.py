@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import pandas as pd
 import numpy as np
+import re
 
 from .utils import (
     check_ip_version,
@@ -19,7 +20,8 @@ from .utils import (
     is_using_ot_services,
     is_communicating_with_ot_hosts,
     convert_list_col_to_str,
-    FilePathInfo
+    FilePathInfo,
+    PortType
 )
 
 
@@ -47,6 +49,7 @@ class PcapParser:
             "src_endpoint.port": int,
             "src_endpoint.subnet": str,  # CUSTOM
             "service.name": str,  # CUSTOM
+            "service.port_type:": str, # CUSTOM - see utils.PortTypes
             "service.description": str,  # CUSTOM
             "service.information_categories": str,  # CUSTOM
             "service.risk_categories": str  # CUSTOM
@@ -331,11 +334,15 @@ class Analyzer:
 
     def service_counts_in_traffic(self) -> dict:
         """Count occurrences of known and unknown services."""
-        named_service_counts = self.traffic_df['service.name'].value_counts().to_dict()
-        unnamed_service_counts = (
-            self.traffic_df[pd.isna(self.traffic_df["service.name"])]
-            ['dst_endpoint.port'].value_counts().to_dict()
-        )
+        unknown_services = self.traffic_df[self.traffic_df['service.port_type'].isin([
+            PortType.EPHEMERAL.name,
+            PortType.UNKNOWN.name,
+            PortType.UNKNOWN_PRIV.name
+        ])]
+        # Known services
+        known_services = self.traffic_df[self.traffic_df['service.port_type'].isin([PortType.KNOWN.name])]
+        named_service_counts = known_services['service.name'].value_counts().to_dict()
+        unnamed_service_counts = unknown_services['service.name'].value_counts().to_dict()
         return {
             "known_services": named_service_counts,
             "unknown_services": unnamed_service_counts
@@ -346,7 +353,7 @@ class Analyzer:
         category_map = {}
         for _, row in self.services_df.iterrows():
             categories = row[category]
-            if isinstance(categories, str):
+            if isinstance(categories, str) and categories != "": # prevent blank categories from being counted
                 for cat in categories.split(", "):
-                    category_map.setdefault(cat, []).append(row['service.name'])
+                        category_map.setdefault(cat, []).append(row['service.name'])
         return category_map

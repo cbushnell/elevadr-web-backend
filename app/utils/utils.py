@@ -9,6 +9,7 @@ import os
 from collections import Counter
 from pathlib import Path
 from typing import Optional, Union
+from enum import Enum
 
 
 class FilePathInfo:
@@ -34,6 +35,12 @@ class FilePathInfo:
         if path_to_pcap and not Path(path_to_pcap).parent.exists():
             os.mkdir(Path(path_to_pcap).parent)
 
+class PortType(Enum):
+    """Define the status of the port for service analysis"""
+    KNOWN = 0 # eleVADR has a known service mapping for this port
+    UNKNOWN_PRIV = 1 # unknown service operating on a port less than 1024, the privileged range
+    UNKNOWN = 2 # port between 1024 and 49152 without a mapping in eleVADR
+    EPHEMERAL = 3 # ephemeral port, used for the client side of client-server communications
 
 # IP Processing Functions
 
@@ -138,18 +145,22 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         row["service.name"] = ports_df.loc[port]['Service Name']
         row["service.is_ot"] = ports_df.loc[port]["OT System Type"]
     except (KeyError, IndexError) as e1:
-        row["service.name"] = None
         row["service.is_ot"] = False
         if int(port) < 1024:
+            row["service.port_type"] = PortType.UNKNOWN_PRIV.name
+            row["service.name"] = PortType.UNKNOWN_PRIV.name + " " + str(port)
             row["service.description"] = "Unassigned well-known port number, this port should not be used."
-            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"]
+            row["service.risk_categories"] = ["Legacy Protocol", "Unknown Service"] # TODO: "Unknown Service" category might not be needed
         elif int(port) < 49151:
+            row["service.port_type"] = PortType.UNKNOWN.name
+            row["service.name"] = PortType.UNKNOWN.name + " " + str(port)
             row["service.description"] = "Unknown assigned port, please inform CISA of what vendor or service we should track at elevadr@cisa.dhs.gov"
-            row["service.risk_categories"] = ["Unknown Service"] 
+            row["service.risk_categories"] = ["Unknown Service"]
         else:
             #ToDo - check consistency of these
-            row["service.description"] = "Ephemeral Port"
-            row["service.risk_categories"] = []
+            row["service.port_type"] = PortType.EPHEMERAL.name
+            row["service.description"] = PortType.EPHEMERAL.name + " " + str(port) 
+            # row["service.risk_categories"] = []
         return row
 
     try:
@@ -157,9 +168,26 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         row["service.description"] = port_risk_row['description']
         row["service.information_categories"] = port_risk_row['information_categories']
         row["service.risk_categories"] = port_risk_row['risk_categories']
+        row["service.port_type"] = PortType.KNOWN.name
     except (KeyError, IndexError):
         row["service.description"] = None
     return row
+
+    # try:
+    #     row["service.name"] = ports_df.loc[port]['Service Name']
+    # except (KeyError, IndexError):
+    #     row["service.name"] = None
+    #     return row
+
+    # try:
+    #     port_risk_row = port_risk_df.loc[str(port)]
+    #     row["service.description"] = port_risk_row['description']
+    #     row["service.information_categories"] = port_risk_row['information_categories']
+    #     row["service.risk_categories"] = port_risk_row['risk_categories']
+    # except (KeyError, IndexError):
+    #     row["service.description"] = None
+
+    # return row
 
 
 # Endpoint Processing Functions
@@ -216,8 +244,9 @@ def count_values_in_list_column(df: pd.DataFrame, column: str) -> dict:
     for _, row in df.iterrows():
         values = row[column]
         if isinstance(values, str):
-            value_list = [x for x in values.split(", ")]
-            counter.update(value_list)
+            if values != "": # Prevent counting cases of blank values
+                value_list = [x for x in values.split(", ")]
+                counter.update(value_list)
     return dict(counter)
 
 
