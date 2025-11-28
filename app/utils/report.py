@@ -5,7 +5,10 @@ import json
 from abc import ABC, abstractmethod
 from typing import List
 
-from .utils import count_values_in_list_column
+from .utils import (
+    count_values_in_list_column,
+    PortType
+)
 
 
 class Report:
@@ -115,11 +118,14 @@ class ServicePanelModule(ReportModule):
         return "service_panel"
 
     def generate_data(self) -> dict:
-        # Services that do not have a known service mapping, but require additional information - service.name in format "UKN: <type> Port <Port Number>"
-        unknown_services = self.traffic_df[self.traffic_df['service.name'].str.contains("UNK:", na=True)]
+        unknown_services = self.traffic_df[self.traffic_df['service.port_type'].isin([
+            PortType.EPHEMERAL.name,
+            PortType.UNKNOWN.name,
+            PortType.UNKNOWN_PRIV.name
+        ])]
         # Known services
-        known_services = self.traffic_df[~self.traffic_df['service.name'].str.contains("UNK:", na=False)]
-
+        known_services = self.traffic_df[~self.traffic_df.isin(unknown_services.index)]
+    
         return {
             "num_known_services": len(
                 known_services["service.name"].dropna().unique()

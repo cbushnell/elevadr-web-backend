@@ -20,7 +20,8 @@ from .utils import (
     is_using_ot_services,
     is_communicating_with_ot_hosts,
     convert_list_col_to_str,
-    FilePathInfo
+    FilePathInfo,
+    PortType
 )
 
 
@@ -48,6 +49,7 @@ class PcapParser:
             "src_endpoint.port": int,
             "src_endpoint.subnet": str,  # CUSTOM
             "service.name": str,  # CUSTOM
+            "service.port_type:": str, # CUSTOM - see utils.PortTypes
             "service.description": str,  # CUSTOM
             "service.information_categories": str,  # CUSTOM
             "service.risk_categories": str  # CUSTOM
@@ -332,12 +334,15 @@ class Analyzer:
 
     def service_counts_in_traffic(self) -> dict:
         """Count occurrences of known and unknown services."""
-        known_services = self.traffic_df[~self.traffic_df['service.name'].str.contains("UNK:", na=False)]
-        unknown_services = self.traffic_df[self.traffic_df['service.name'].str.contains("UNK:", na=True)]
+        unknown_services = self.traffic_df[self.traffic_df['service.port_type'].isin([
+            PortType.EPHEMERAL.name,
+            PortType.UNKNOWN.name,
+            PortType.UNKNOWN_PRIV.name
+        ])]
+        # Known services
+        known_services = self.traffic_df[self.traffic_df['service.port_type'].isin([PortType.KNOWN.name])]
         named_service_counts = known_services['service.name'].value_counts().to_dict()
-        unnamed_service_counts = (
-            unknown_services['dst_endpoint.port'].value_counts().to_dict()
-        )
+        unnamed_service_counts = unknown_services['service.name'].value_counts().to_dict()
         return {
             "known_services": named_service_counts,
             "unknown_services": unnamed_service_counts
