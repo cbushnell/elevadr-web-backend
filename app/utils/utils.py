@@ -159,7 +159,8 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
         else:
             #ToDo - check consistency of these
             row["service.port_type"] = PortType.EPHEMERAL.name
-            row["service.description"] = PortType.EPHEMERAL.name + " " + str(port) 
+            row["service.name"] = PortType.EPHEMERAL.name + " " + str(port) 
+            row["service.description"] = "Temporarily assigned high-value port used for the short duration of a communication session"
             # row["service.risk_categories"] = []
         return row
 

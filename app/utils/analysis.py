@@ -344,6 +344,7 @@ class Analyzer:
         ])]
         # Known services
         known_services = self.traffic_df[self.traffic_df['service.port_type'].isin([PortType.KNOWN.name])]
+
         named_service_counts = known_services['service.name'].value_counts().to_dict()
         unnamed_service_counts = unknown_services['service.name'].value_counts().to_dict()
         return {

@@ -179,12 +179,16 @@ class ServiceCountModule(ReportModule):
     def generate_data(self) -> dict:
         # Note: This module depends on ServicePanelModule data
         # We'll need to access the analyzer's services for counting
-        num_known = len(self.services_df["service.name"].dropna().unique())
-        num_unknown = len(
-            self.traffic_df[pd.isna(self.traffic_df["service.name"])][
-                "dst_endpoint.port"
-            ].drop_duplicates()
-        )
+        unknown_services = self.traffic_df[self.traffic_df['service.port_type'].isin([
+            PortType.EPHEMERAL.name,
+            PortType.UNKNOWN.name,
+            PortType.UNKNOWN_PRIV.name
+        ])]
+        # Known services
+        known_services = self.traffic_df[~self.traffic_df.isin(unknown_services.index)]
+
+        num_known = len(known_services["service.name"].unique())
+        num_unknown = len(unknown_services["service.name"].unique())
 
         service_total_count = num_known + num_unknown
 
