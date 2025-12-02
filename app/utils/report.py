@@ -131,11 +131,7 @@ class ServicePanelModule(ReportModule):
                 known_services["service.name"].dropna().unique()
             ),
             "num_ot_services": len(
-                self.services_df[
-                    self.services_df["service.information_categories"].str.contains(
-                        "Industrial Protocol", na=False
-                    )
-                ]
+                known_services[known_services["service.is_ot"]]["service.name"].unique()
             ),
             "num_risky_services": len(
                 self.services_df["service.risk_categories"].dropna()
@@ -266,9 +262,7 @@ class OTServicesModule(ReportModule):
 
     def generate_data(self) -> list:
         return self.services_df[
-            self.services_df["service.information_categories"].str.contains(
-                "Industrial Protocol", na=False
-            )
+            self.services_df['service.is_ot']
         ].to_dict(orient="records")
 
 
