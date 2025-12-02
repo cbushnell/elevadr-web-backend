@@ -141,10 +141,10 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
     """Map port to service name and enrich with risk information."""
     port = row["dst_endpoint.port"]
 
-    try:
+    try: # Port has a known mapping
         row["service.name"] = ports_df.loc[port]['Service Name']
         row["service.is_ot"] = ports_df.loc[port]["OT System Type"]
-    except (KeyError, IndexError) as e1:
+    except (KeyError, IndexError) as e1: # Port does not have a known mapping
         row["service.is_ot"] = False
         if int(port) < 1024:
             row["service.port_type"] = PortType.UNKNOWN_PRIV.name
@@ -163,13 +163,13 @@ def service_processing(row: pd.Series, ports_df: pd.DataFrame,
             # row["service.risk_categories"] = []
         return row
 
-    try:
+    try: # Service has known associated risks/information
         port_risk_row = port_risk_df.loc[str(port)]
         row["service.description"] = port_risk_row['description']
         row["service.information_categories"] = port_risk_row['information_categories']
         row["service.risk_categories"] = port_risk_row['risk_categories']
         row["service.port_type"] = PortType.KNOWN.name
-    except (KeyError, IndexError):
+    except (KeyError, IndexError): # Service does not have known associated risks/information
         row["service.description"] = None
     return row
 

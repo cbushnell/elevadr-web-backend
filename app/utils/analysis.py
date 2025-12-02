@@ -49,10 +49,11 @@ class PcapParser:
             "src_endpoint.port": int,
             "src_endpoint.subnet": str,  # CUSTOM
             "service.name": str,  # CUSTOM
-            "service.port_type:": str, # CUSTOM - see utils.PortTypes
+            "service.port_type": str, # CUSTOM - see utils.PortTypes
             "service.description": str,  # CUSTOM
             "service.information_categories": str,  # CUSTOM
-            "service.risk_categories": str  # CUSTOM
+            "service.risk_categories": str,  # CUSTOM
+            "service.is_ot": bool # CUSTOM
         }
         self.traffic_df = pd.DataFrame(columns=traffic_df_schema.keys()).astype(traffic_df_schema)
 
@@ -97,9 +98,11 @@ class PcapParser:
 
         services_df_schema = {
             "service.name": str,  # CUSTOM
+            "service.port_type": str, # CUSTOM - see utils.PortTypes
             "service.description": str,  # CUSTOM
             "service.information_categories": str,  # CUSTOM
-            "service.risk_categories": str  # CUSTOM
+            "service.risk_categories": str,  # CUSTOM
+            "service.is_ot": bool # CUSTOM
         }
         self.services_df = pd.DataFrame(columns=services_df_schema.keys()).astype(services_df_schema)
 
